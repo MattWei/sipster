@@ -8,6 +8,8 @@
         'src/SIPSTERCall.cc',
         'src/SIPSTERMedia.cc',
         'src/SIPSTERTransport.cc',
+        'src/SIPSTERBuddy.cc',
+        'src/hplayer.cpp'
       ],
       'include_dirs': [
         "src",
@@ -16,13 +18,12 @@
       'conditions': [
         [ 'OS!="win"', {
           'cflags_cc': [
-            '<!@(pkg-config --atleast-version=2.4.5 libpjproject)',
-            '<!@(pkg-config --cflags libpjproject)',
+            '<!@(pkg-config --cflags --libs /home/weiminji/workspace/sources/libpjsip/linux/lib/lib/pkgconfig/libpjproject.pc)',
             '-fexceptions',
             '-Wno-maybe-uninitialized',
           ],
           'libraries': [
-            '<!@(pkg-config --libs libpjproject)',
+            '<!@(pkg-config --cflags --libs /home/weiminji/workspace/sources/libpjsip/linux/lib/lib/pkgconfig/libpjproject.pc)',
           ],
         }],
         [ 'OS=="mac"', {

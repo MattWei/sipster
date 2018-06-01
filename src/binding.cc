@@ -4,9 +4,13 @@
 #include <strings.h>
 #include <regex.h>
 #include <pjsua2.hpp>
+#include <iostream>
 
 #include "common.h"
 #include "SIPSTERTransport.h"
+#include "hplayer.hpp"
+
+#include "SIPSTERLocalMedia.h"
 
 #define X(kind, ctype, name, v8type, valconv)                                  \
   Nan::Persistent<String> kind##_##name##_symbol;
@@ -14,6 +18,9 @@
   CALLDTMF_FIELDS
   REGSTATE_FIELDS
   REGSTARTING_FIELDS
+  INSTANTMESSAGE_FIELDS
+  PLAYERSTATUS_FIELDS
+  BUDDYSTATUS_FIELDS
 #undef X
 
 #define X(kind, literal)                                                       \
@@ -29,6 +36,8 @@ using namespace pj;
 class SIPSTERLogWriter;
 
 SIPSTERLogWriter* logger = NULL;
+//SIPSTERLocalMedia *localMedia = NULL;
+
 struct CustomLogEntry {
   int level;
   string msg;
@@ -49,6 +58,8 @@ uv_mutex_t async_mutex;
 uv_async_t dumb;
 Nan::Persistent<String> emit_symbol;
 Endpoint* ep = new Endpoint;
+
+uv_mutex_t local_media_mutex;
 
 // DTMF event ==================================================================
 Nan::Persistent<String> CALLDTMF_DTMF0_symbol;
@@ -184,6 +195,7 @@ void dumb_cb(uv_async_t* handle) {
       case EVENT_CALLSTATE: {
         EV_ARGS_CALLSTATE* args = reinterpret_cast<EV_ARGS_CALLSTATE*>(ev.args);
         Local<Value> ev_name;
+
         switch (args->_state) {
           case PJSIP_INV_STATE_CALLING:
             ev_name = Nan::New(ev_CALLSTATE_calling_symbol);
@@ -198,9 +210,11 @@ void dumb_cb(uv_async_t* handle) {
             ev_name = Nan::New(ev_CALLSTATE_connecting_symbol);
           break;
           case PJSIP_INV_STATE_CONFIRMED:
+            std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_CONFIRMED << std::endl;
             ev_name = Nan::New(ev_CALLSTATE_confirmed_symbol);
           break;
           case PJSIP_INV_STATE_DISCONNECTED:
+            std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_DISCONNECTED << std::endl;
             ev_name = Nan::New(ev_CALLSTATE_disconnected_symbol);
           break;
           default:
@@ -352,6 +366,81 @@ void dumb_cb(uv_async_t* handle) {
         delete args;
       }
       break;
+      case EVENT_INSTANTMESSAGE: {
+        //std::cout << "dumb_cb EVENT_INSTANTMESSAGE" << std::endl;
+        
+        EV_ARGS_INSTANTMESSAGE* args =
+          reinterpret_cast<EV_ARGS_INSTANTMESSAGE*>(ev.args);
+        SIPSTERAccount* acct = ev.acct;
+
+        Local<Value> emit_argv[N_INSTANTMESSAGE_FIELDS] = {
+          Nan::New(ev_INSTANTMESSAGE_instantMessage_symbol),
+#define X(kind, ctype, name, v8type, valconv)                                  \
+          Nan::New<v8type>(args->valconv).ToLocalChecked(),
+          INSTANTMESSAGE_FIELDS
+#undef X
+        };
+
+        //std::cout << "dumb_cb EVENT_INSTANTMESSAGE, field size:" 
+        //          << N_INSTANTMESSAGE_FIELDS << "," << args->fromUri << "," << args->msg << std::endl;
+        acct->emit->Call(acct->handle(), N_INSTANTMESSAGE_FIELDS, emit_argv);
+        delete args;
+      }
+      break;
+      case EVENT_PLAYERSTATUS: {
+        //std::cout << "dumb_cb EVENT_PLAYERSTATUS" << std::endl;
+        
+        EV_ARGS_PLAYERSTATUS* args =
+          reinterpret_cast<EV_ARGS_PLAYERSTATUS*>(ev.args);
+        SIPSTERMedia* media = ev.media;
+
+        Local<Value> emit_argv[N_PLAYERSTATUS_FIELDS] = {
+          Nan::New(ev_PLAYERSTATUS_playerStatus_symbol),
+          Nan::New(args->songPath.c_str()).ToLocalChecked(),
+          Nan::New(args->type),
+          Nan::New(args->param)
+        };
+
+        //std::cout << "dumb_cb EVENT_PLAYERSTATUS, field size:" 
+        //          << N_PLAYERSTATUS_FIELDS << "," << args->songPath 
+        //          << "," << args->type << "," << args->param << std::endl;
+        if (media && media->emit) {
+          media->emit->Call(media->handle(), N_PLAYERSTATUS_FIELDS, emit_argv);
+        } else {
+          std::cout << "media emit fail" << std::endl;
+        }
+        
+        delete args;
+      }
+      break;
+      case EVENT_BUDDYSTATUS: {
+        std::cout << "dumb_cb EVENT_BUDDYSTATUS" << std::endl;
+        
+        EV_ARGS_BUDDYSTATUS* args =
+          reinterpret_cast<EV_ARGS_BUDDYSTATUS*>(ev.args);
+        SIPSTERBuddy* buddy = ev.buddy;
+
+        Local<Value> emit_argv[N_BUDDYSTATUS_FIELDS] = {
+          Nan::New(ev_BUDDYSTATUS_buddyStatus_symbol),
+          Nan::New(args->uri.c_str()).ToLocalChecked(),
+          Nan::New(args->statusText.c_str()).ToLocalChecked()
+        };
+        
+        //std::cout << "dumb_cb EVENT_BUDDYSTATUS, field size:" 
+        //          << N_BUDDYSTATUS_FIELDS << "," << args->uri 
+        //          << "," << args->statusText << std::endl;
+        if (buddy && buddy->emit) {
+          buddy->emit->Call(buddy->handle(), N_BUDDYSTATUS_FIELDS, emit_argv);
+        } else {
+          std::cout << "buddy emit fail" << std::endl;
+        }
+        
+        delete args;
+      }
+      break;
+      default:
+        std::cout << "unknown event " << ev.type  << std::endl;
+      break;
     }
   }
   uv_mutex_unlock(&event_mutex);
@@ -389,12 +478,13 @@ void logging_cb(uv_async_t* handle) {
 }
 // =============================================================================
 
+
 // static methods ==============================================================
 static NAN_METHOD(CreateRecorder) {
   Nan::HandleScope scope;
 
   string dest;
-  unsigned fmt = PJMEDIA_FILE_WRITE_ULAW;
+  unsigned fmt = PJMEDIA_FILE_WRITE_PCM;
   pj_ssize_t max_size = 0;
   if (info.Length() > 0 && info[0]->IsString()) {
     Nan::Utf8String dest_str(info[0]);
@@ -440,25 +530,7 @@ static NAN_METHOD(CreateRecorder) {
 static NAN_METHOD(CreatePlayer) {
   Nan::HandleScope scope;
 
-  string src;
-  unsigned opts = 0;
-  if (info.Length() > 0 && info[0]->IsString()) {
-    Nan::Utf8String src_str(info[0]);
-    src = string(*src_str);
-    if (info.Length() > 1 && info[1]->IsBoolean() && info[1]->BooleanValue())
-      opts = PJMEDIA_FILE_NO_LOOP;
-  } else
-    return Nan::ThrowTypeError("Missing source filename");
-
-  SIPSTERPlayer* player = new SIPSTERPlayer();
-  try {
-    player->createPlayer(src, opts);
-  } catch(Error& err) {
-    delete player;
-    string errstr = "player->createPlayer() error: " + err.info();
-    return Nan::ThrowError(errstr.c_str());
-  }
-
+  HPlayer* player = new HPlayer();
   Local<Object> med_obj;
   med_obj = Nan::New(SIPSTERMedia_constructor)
               ->GetFunction()
@@ -467,7 +539,6 @@ static NAN_METHOD(CreatePlayer) {
   med->media = player;
   med->is_media_new = true;
   player->media = med;
-  player->options = opts;
 
   info.GetReturnValue().Set(med_obj);
 }
@@ -641,7 +712,8 @@ static NAN_METHOD(EPInit) {
                       static_cast<uv_async_cb>(logging_cb));
       }
 
-      ep_cfg.logConfig = logConfig;
+      //ep_cfg.logConfig = logConfig;
+      ep_cfg.logConfig.level = 5;
     }
 
     val = cfg_obj->Get(Nan::New("medConfig").ToLocalChecked());
@@ -677,7 +749,10 @@ static NAN_METHOD(EPInit) {
   }
 
   try {
+    ep_cfg.medConfig.clockRate = 44100;
+    ep_cfg.medConfig.sndClockRate = 44100;
     ep->libInit(ep_cfg);
+    ep->codecSetPriority("L16/44100/1", 139);
     ep_init = true;
   } catch(Error& err) {
     errstr = "libInit error: " + err.info();
@@ -686,7 +761,7 @@ static NAN_METHOD(EPInit) {
 
   uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
 
-  Endpoint::instance().audDevManager().setNullDev();
+  //Endpoint::instance().audDevManager().setNullDev();
 
   if ((info.Length() == 1 && info[0]->IsBoolean() && info[0]->BooleanValue())
       || (info.Length() > 1
@@ -697,6 +772,7 @@ static NAN_METHOD(EPInit) {
     try {
       ep->libStart();
       ep_start = true;
+
     } catch(Error& err) {
       string errstr = "libStart error: " + err.info();
       return Nan::ThrowError(errstr.c_str());
@@ -816,6 +892,9 @@ extern "C" {
   CALLDTMF_FIELDS
   REGSTATE_FIELDS
   REGSTARTING_FIELDS
+  INSTANTMESSAGE_FIELDS
+  PLAYERSTATUS_FIELDS
+  BUDDYSTATUS_FIELDS
 #undef X
 
     CALLDTMF_DTMF0_symbol.Reset(Nan::New("0").ToLocalChecked());
@@ -840,11 +919,13 @@ extern "C" {
     uv_mutex_init(&event_mutex);
     uv_mutex_init(&log_mutex);
     uv_mutex_init(&async_mutex);
+    uv_mutex_init(&local_media_mutex);
 
     SIPSTERAccount::Initialize(target);
     SIPSTERCall::Initialize(target);
     SIPSTERMedia::Initialize(target);
     SIPSTERTransport::Initialize(target);
+    SIPSTERBuddy::Initialize(target);
 
     Nan::Set(target,
              Nan::New("version").ToLocalChecked(),

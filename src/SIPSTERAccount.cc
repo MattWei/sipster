@@ -3,6 +3,8 @@
 #include "SIPSTERTransport.h"
 #include "common.h"
 
+#include <iostream>
+
 Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
 
 regex_t fromuri_regex;
@@ -361,6 +363,18 @@ AccountConfig SIPSTERAccount::genConfig(Local<Object> acct_obj) {
   return acct_cfg;
 }
 
+void SIPSTERAccount::onInstantMessage(OnInstantMessageParam &prm)
+{
+    std::cout << "onInstantMessage from: " << prm.fromUri << ", msg:" << prm.msgBody  << std::endl;
+    SETUP_EVENT(INSTANTMESSAGE);
+    ev.acct = this;
+
+    args->fromUri = prm.fromUri;
+    args->msg = prm.msgBody;
+
+    ENQUEUE_EVENT(ev);
+}
+
 void SIPSTERAccount::onRegStarted(OnRegStartedParam &prm) {
   SETUP_EVENT(REGSTARTING);
   ev.acct = this;
@@ -474,6 +488,9 @@ NAN_METHOD(SIPSTERAccount::Modify) {
     return Nan::ThrowTypeError("Missing renew argument");
 
   try {
+    std::cout << "sip account:" << acct_cfg.idUri << std::endl;
+    std::cout << "registerarUri:" << acct_cfg.regConfig.registrarUri << std::endl;
+
     acct->modify(acct_cfg);
   } catch(Error& err) {
     string errstr = "Account->modify() error: " + err.info();
@@ -585,14 +602,33 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
 
   string dest;
   CallOpParam prm;
+  bool isAutoConnect = true;
   if (info.Length() > 0 && info[0]->IsString()) {
     Nan::Utf8String dest_str(info[0]);
     dest = string(*dest_str);
-    if (info.Length() > 1) {
-      prm.statusCode = static_cast<pjsip_status_code>(info[1]->Int32Value());
-      if (info.Length() > 2 && info[2]->IsString()) {
-        Nan::Utf8String reason_str(info[2]);
-        prm.reason = string(*reason_str);
+
+    if (info.Length() > 1 && info[1]->IsString()) {
+        Nan::Utf8String param_str(info[1]);
+
+        SipHeader sipHeader;
+        sipHeader.hName = "AppMessage";
+        sipHeader.hValue = string(*param_str);
+        SipHeaderVector sipHeaderVector;
+        sipHeaderVector.push_back(sipHeader);
+        SipTxOption sipTxOption;
+        sipTxOption.headers = sipHeaderVector;
+        prm.txOption = sipTxOption;
+
+        std::cout << "call param:" << string(*param_str) << std::endl;
+      if (info.Length() > 2) {
+        isAutoConnect = info[2]->BooleanValue();
+        if (info.Length() > 3) {
+          prm.statusCode = static_cast<pjsip_status_code>(info[3]->Int32Value());
+          if (info.Length() > 4 && info[4]->IsString()) {
+            Nan::Utf8String reason_str(info[4]);
+            prm.reason = string(*reason_str);
+          }
+        }
       }
     }
   } else
@@ -605,6 +641,8 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
   SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(call_obj);
 
   try {
+    std::cout << "Make call to " << dest << " is auto connect:" << isAutoConnect  << std::endl;
+    call->setAutoConnect(isAutoConnect);
     call->makeCall(dest, prm);
   } catch(Error& err) {
     string errstr = "Call.makeCall() error: " + err.info();
@@ -613,6 +651,90 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
 
   info.GetReturnValue().Set(call_obj);
 }
+
+
+NAN_METHOD(SIPSTERAccount::AddBuddy) {
+  Nan::HandleScope scope;
+
+  std::cout << "SIPSTERAccount::AddBuddy" << std::endl;
+  
+  string buddyUri;
+  bool isSubscribePresence = false;
+
+  if (info.Length() > 0 && info[0]->IsString()) {
+    Nan::Utf8String dest_str(info[0]);
+    buddyUri = string(*dest_str);
+
+    if (info.Length() > 1 && info[1]->IsBoolean()) {
+      isSubscribePresence = info[1]->BooleanValue();
+    }
+  } else
+    return Nan::ThrowTypeError("Missing call destination");
+
+  //Handle<Value> new_buddy_args[1] = { info.This() };
+  Local<Object> buddy_obj =
+    Nan::New(SIPSTERBuddy_constructor)->GetFunction()
+                                     ->NewInstance();
+  SIPSTERBuddy* buddy = Nan::ObjectWrap::Unwrap<SIPSTERBuddy>(buddy_obj);
+  SIPSTERAccount* acct = Nan::ObjectWrap::Unwrap<SIPSTERAccount>(info.This());
+
+  try {
+    BuddyConfig cfg;
+    cfg.uri = buddyUri;
+    buddy->create(*(acct), cfg);
+    buddy->subscribePresence(isSubscribePresence);
+    acct->addBuddy(buddy);
+    std::cout << "Add buddy " << buddyUri << "is subscribe presence " << isSubscribePresence << std::endl;
+  } catch(Error& err) {
+    string errstr = "Buddy.creak() error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  } catch (...) {
+    string errstr = "Buddy.creak() error";
+    return Nan::ThrowError(errstr.c_str());
+  }
+
+  info.GetReturnValue().Set(buddy_obj);
+}
+
+
+NAN_METHOD(SIPSTERAccount::DelBuddy) {
+  Nan::HandleScope scope;
+
+  std::cout << "SIPSTERAccount::DelBuddy" << std::endl;
+  
+  string buddyUri;
+  if (info.Length() > 0 && info[0]->IsString()) {
+    Nan::Utf8String dest_str(info[0]);
+    buddyUri = string(*dest_str);
+  } else
+    return Nan::ThrowTypeError("Missing call destination");
+
+  std::cout << "SIPSTERAccount::DelBuddy:" << buddyUri << std::endl;
+  SIPSTERAccount* acct = Nan::ObjectWrap::Unwrap<SIPSTERAccount>(info.This());
+  try {
+    Buddy *buddy = acct->findBuddy(buddyUri);
+    if (buddy != NULL) {
+      //std::cout << "SIPSTERAccount::DelBuddy acct remove buddy" << std::endl;
+      buddy->subscribePresence(false);
+      acct->removeBuddy(buddy);
+      //std::cout << "SIPSTERAccount::DelBuddy acct remove buddy succeed" << std::endl;
+      //delete buddy;
+
+      //std::cout << "SIPSTERAccount::DelBuddy succeed" << std::endl;
+    }
+  } catch(Error& err) {
+    string errstr = "Buddy.delete() error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  } catch (...) {
+    string errstr = "Buddy.delete()";
+    std::cout << "SIPSTERAccount::DelBuddy fail" << std::endl;
+    return Nan::ThrowError(errstr.c_str());
+  }
+
+  info.GetReturnValue().SetUndefined();
+}
+
+
 
 NAN_METHOD(SIPSTERAccount::DoRef) {
   Nan::HandleScope scope;
@@ -648,6 +770,8 @@ void SIPSTERAccount::Initialize(Handle<Object> target) {
   Nan::SetPrototypeMethod(tpl, "setTransport", SetTransport);
   Nan::SetPrototypeMethod(tpl, "ref", DoRef);
   Nan::SetPrototypeMethod(tpl, "unref", DoUnref);
+  Nan::SetPrototypeMethod(tpl, "addBuddy", AddBuddy);
+  Nan::SetPrototypeMethod(tpl, "delBuddy", DelBuddy);
 
   Nan::SetAccessor(tpl->PrototypeTemplate(),
                    Nan::New("valid").ToLocalChecked(),

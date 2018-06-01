@@ -21,7 +21,7 @@ public:
   pjmedia_dir dir;
   string srcRTP;
   string srcRTCP;
-
+  
 
   SIPSTERMedia();
   ~SIPSTERMedia();
@@ -32,11 +32,20 @@ public:
   static NAN_METHOD(AdjustRxLevel);
   static NAN_METHOD(AdjustTxLevel);
   static NAN_METHOD(Close);
+  static NAN_METHOD(PlaySong);
+    
   static NAN_GETTER(RxLevelGetter);
   static NAN_GETTER(TxLevelGetter);
   static NAN_GETTER(DirGetter);
   static NAN_GETTER(SrcRTPGetter);
   static NAN_GETTER(SrcRTCPGetter);
+  
+
+  static NAN_METHOD(StartLocalPlay);
+  static NAN_METHOD(StopLocalPlay);
+  static NAN_METHOD(StartLocalRecord);
+  static NAN_METHOD(StopLocalRecord);
+
   static void Initialize(Handle<Object> target);
 };
 

@@ -2,10 +2,13 @@
 #include "SIPSTERAccount.h"
 #include "common.h"
 
+#include <iostream>
+
 Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 
 SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id) {
   emit = NULL;
+  mIsAutoConnect = false;
   uv_mutex_lock(&async_mutex);
   uv_ref(reinterpret_cast<uv_handle_t*>(&dumb));
   uv_mutex_unlock(&async_mutex);
@@ -19,11 +22,32 @@ SIPSTERCall::~SIPSTERCall() {
   uv_mutex_unlock(&async_mutex);
 }
 
-void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
-  SETUP_EVENT_NOARGS(CALLMEDIA);
-  ev.call = this;
+void SIPSTERCall::setAutoConnect(bool isAutoConnect)
+{
+  mIsAutoConnect = isAutoConnect;
+}
 
-  ENQUEUE_EVENT(ev);
+void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
+  if (mIsAutoConnect) {
+    CallInfo ci = getInfo();
+    std::cout << "Auto startTransmit " << ci.media.size() << std::endl;
+    // Iterate all the call medias
+    for (unsigned i = 0; i < ci.media.size(); i++) {
+        if (ci.media[i].type==PJMEDIA_TYPE_AUDIO && getMedia(i)) {
+            AudioMedia *aud_med = (AudioMedia *)getMedia(i);
+
+            // Connect the call audio media to sound device
+            AudDevManager& mgr = Endpoint::instance().audDevManager();
+            aud_med->startTransmit(mgr.getPlaybackDevMedia());
+            mgr.getCaptureDevMedia().startTransmit(*aud_med);
+        }
+    }
+  } else {
+    SETUP_EVENT_NOARGS(CALLMEDIA);
+    ev.call = this;
+
+    ENQUEUE_EVENT(ev);
+  }
 }
 
 void SIPSTERCall::onCallState(OnCallStateParam &prm) {
@@ -34,6 +58,8 @@ void SIPSTERCall::onCallState(OnCallStateParam &prm) {
 
   args->_state = ci.state;
 
+  std::cout << "call state:" << ci.state << std::endl;
+  
   ENQUEUE_EVENT(ev);
 }
 

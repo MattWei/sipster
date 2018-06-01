@@ -1,6 +1,9 @@
 #include "SIPSTERMedia.h"
 #include "common.h"
 
+#include <iostream>
+#include "hplayer.hpp"
+
 Nan::Persistent<FunctionTemplate> SIPSTERMedia_constructor;
 
 static Nan::Persistent<String> media_dir_none_symbol;
@@ -139,6 +142,77 @@ NAN_METHOD(SIPSTERMedia::Close) {
   info.GetReturnValue().SetUndefined();
 }
 
+NAN_METHOD(SIPSTERMedia::PlaySong) {
+  Nan::HandleScope scope;
+  SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
+
+  if (med->media) {
+    if (info.Length() > 0 && info[0]->IsString()) {
+      Nan::Utf8String song_str(info[0]);
+      string song = string(*song_str);
+
+      std::cout << "SIPSTERMedia::PlaySong:" << song << std::endl;
+      ((HPlayer *)(med->media))->play(song);
+    } else
+      return Nan::ThrowTypeError("Missing song path");
+  }
+
+  info.GetReturnValue().SetUndefined();
+}
+
+
+NAN_METHOD(SIPSTERMedia::StartLocalPlay) {
+  Nan::HandleScope scope;
+  SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
+
+  if (med->media) {
+    AudioMedia& play_med = Endpoint::instance().audDevManager().getPlaybackDevMedia();
+    med->media->startTransmit(play_med);
+  } else
+      return Nan::ThrowTypeError("Missing song path");
+
+  info.GetReturnValue().SetUndefined();
+}
+
+NAN_METHOD(SIPSTERMedia::StopLocalPlay) {
+  Nan::HandleScope scope;
+  SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
+
+  if (med->media) {
+    AudioMedia& play_med = Endpoint::instance().audDevManager().getPlaybackDevMedia();
+    med->media->stopTransmit(play_med);
+  } else
+      return Nan::ThrowTypeError("Missing song path");
+
+  info.GetReturnValue().SetUndefined();
+}
+
+NAN_METHOD(SIPSTERMedia::StartLocalRecord) {
+  Nan::HandleScope scope;
+  SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
+
+  if (med->media) {
+      AudioMedia& cap_med = Endpoint::instance().audDevManager().getCaptureDevMedia();
+      cap_med.startTransmit(*med->media);
+  } else
+      return Nan::ThrowTypeError("Missing song path");
+
+  info.GetReturnValue().SetUndefined();
+}
+
+NAN_METHOD(SIPSTERMedia::StopLocalRecord) {
+  Nan::HandleScope scope;
+  SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
+
+  if (med->media) {
+      AudioMedia& cap_med = Endpoint::instance().audDevManager().getCaptureDevMedia();
+      cap_med.stopTransmit(*med->media);
+  } else
+      return Nan::ThrowTypeError("Missing song path");
+
+  info.GetReturnValue().SetUndefined();
+}
+
 NAN_GETTER(SIPSTERMedia::RxLevelGetter) {
   SIPSTERMedia* med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
 
@@ -227,6 +301,12 @@ void SIPSTERMedia::Initialize(Handle<Object> target) {
   Nan::SetPrototypeMethod(tpl, "adjustRxLevel", AdjustRxLevel);
   Nan::SetPrototypeMethod(tpl, "adjustTxLevel", AdjustTxLevel);
   Nan::SetPrototypeMethod(tpl, "close", Close);
+  Nan::SetPrototypeMethod(tpl, "playSong", PlaySong);
+
+  Nan::SetPrototypeMethod(tpl, "startLocalPlay", StartLocalPlay);
+  Nan::SetPrototypeMethod(tpl, "stopLocalPlay", StopLocalPlay);
+  Nan::SetPrototypeMethod(tpl, "startLocalRecord", StartLocalRecord);
+  Nan::SetPrototypeMethod(tpl, "stopLocalRecord", StopLocalRecord);
 
   Nan::SetAccessor(tpl->PrototypeTemplate(),
                    Nan::New("dir").ToLocalChecked(),

@@ -24,6 +24,7 @@ public:
   virtual void onRegStarted(OnRegStartedParam &prm);
   virtual void onRegState(OnRegStateParam &prm);
   virtual void onIncomingCall(OnIncomingCallParam &iprm);
+  virtual void onInstantMessage(OnInstantMessageParam &prm);
   static NAN_METHOD(New);
   static NAN_METHOD(Modify);
   static NAN_GETTER(ValidGetter);
@@ -35,6 +36,9 @@ public:
   static NAN_METHOD(MakeCall);
   static NAN_METHOD(DoRef);
   static NAN_METHOD(DoUnref);
+  static NAN_METHOD(AddBuddy);
+  static NAN_METHOD(DelBuddy);
+  
   static void Initialize(Handle<Object> target);
 };
 

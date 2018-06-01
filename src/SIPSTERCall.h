@@ -14,12 +14,16 @@ using namespace v8;
 using namespace pj;
 
 class SIPSTERCall : public Call, public Nan::ObjectWrap {
+private:
+  bool mIsAutoConnect;
+  
 public:
   Nan::Callback* emit;
 
   SIPSTERCall(Account &acc, int call_id=PJSUA_INVALID_ID);
   ~SIPSTERCall();
 
+  void setAutoConnect(bool isAutoConnect);
   void onCallMediaState(OnCallMediaStateParam &prm);
   virtual void onCallState(OnCallStateParam &prm);
   virtual void onDtmfDigit(OnDtmfDigitParam &prm);

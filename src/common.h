@@ -11,6 +11,7 @@
 #include "SIPSTERAccount.h"
 #include "SIPSTERCall.h"
 #include "SIPSTERMedia.h"
+#include "SIPSTERBuddy.h"
 
 using namespace std;
 using namespace node;
@@ -75,7 +76,10 @@ using namespace pj;
   X(REGSTATE)                                                                  \
   X(CALLMEDIA)                                                                 \
   X(PLAYEREOF)                                                                 \
-  X(REGSTARTING)
+  X(REGSTARTING)                                                               \
+  X(INSTANTMESSAGE)                                                            \
+  X(PLAYERSTATUS)                                                              \
+  X(BUDDYSTATUS)  
 
 #define EVENT_SYMBOLS                                                          \
   X(INCALL, call)                                                              \
@@ -93,8 +97,11 @@ using namespace pj;
   X(CALLMEDIA, media)                                                          \
   X(PLAYEREOF, eof)                                                            \
   X(REGSTARTING, registering)                                                  \
-  X(REGSTARTING, unregistering)
-
+  X(REGSTARTING, unregistering)                                                \
+  X(INSTANTMESSAGE, instantMessage)                                            \
+  X(PLAYERSTATUS, playerStatus)                                                \
+  X(BUDDYSTATUS, buddyStatus)
+                    
 enum SIPEvent {
 #define X(kind)                                                                \
   EVENT_##kind,
@@ -107,6 +114,7 @@ struct SIPEventInfo {
   SIPSTERCall* call;
   SIPSTERAccount* acct;
   SIPSTERMedia* media;
+  SIPSTERBuddy* buddy;
   void* args;
 };
 
@@ -160,6 +168,43 @@ struct EV_ARGS_REGSTARTING {
 };
 // =============================================================================
 
+// Instant message event ====================================================
+#define N_INSTANTMESSAGE_FIELDS 3
+#define INSTANTMESSAGE_FIELDS                                                     \
+  X(INSTANTMESSAGE, string, fromUri, String, fromUri.c_str())              \
+  X(INSTANTMESSAGE, string, msg, String, msg.c_str())
+struct EV_ARGS_INSTANTMESSAGE {
+#define X(kind, ctype, name, v8type, valconv) ctype name;
+  INSTANTMESSAGE_FIELDS
+#undef X
+};
+// =============================================================================
+
+// player status event ====================================================
+#define N_PLAYERSTATUS_FIELDS 4
+#define PLAYERSTATUS_FIELDS                                                     \
+  X(PLAYERSTATUS, string, songPath, String, songPath.c_str())              \
+  X(PLAYERSTATUS, int, type, Integer, type)                                \
+  X(PLAYERSTATUS, int, param, Integer, param)                                
+struct EV_ARGS_PLAYERSTATUS {
+#define X(kind, ctype, name, v8type, valconv) ctype name;
+  PLAYERSTATUS_FIELDS
+#undef X
+};
+// =============================================================================
+
+// buddy status event ====================================================
+#define N_BUDDYSTATUS_FIELDS 3
+#define BUDDYSTATUS_FIELDS                                                     \
+  X(BUDDYSTATUS, string, uri, String, uri.c_str())              \
+  X(BUDDYSTATUS, string, statusText, String, statusText.c_str())                                                             
+struct EV_ARGS_BUDDYSTATUS {
+#define X(kind, ctype, name, v8type, valconv) ctype name;
+  BUDDYSTATUS_FIELDS
+#undef X
+};
+// =============================================================================
+
 #define N_CALLDTMF_FIELDS 1
 #define CALLDTMF_FIELDS                                                        \
   X(CALLDTMF, char, digit, String, digit[0])
@@ -175,6 +220,9 @@ struct EV_ARGS_CALLDTMF {
   CALLDTMF_FIELDS
   REGSTATE_FIELDS
   REGSTARTING_FIELDS
+  INSTANTMESSAGE_FIELDS
+  PLAYERSTATUS_FIELDS
+  BUDDYSTATUS_FIELDS
 #undef X
 
 // start generic event-related definitions =====================================
@@ -194,6 +242,7 @@ extern Nan::Persistent<FunctionTemplate> SIPSTERMedia_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERTransport_constructor;
+extern Nan::Persistent<FunctionTemplate> SIPSTERBuddy_constructor;
 
 extern Endpoint* ep;
 
