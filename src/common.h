@@ -4,8 +4,8 @@
 #include <node.h>
 #include <nan.h>
 #include <string.h>
-#include <strings.h>
-#include <regex.h>
+//#include <strings.h>
+//#include <regex.h>
 #include <pjsua2.hpp>
 
 #include "SIPSTERAccount.h"
