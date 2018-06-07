@@ -761,6 +761,9 @@ static NAN_METHOD(EPInit) {
 
   uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
 
+  if (Endpoint::instance().audDevManager().getDevCount() <= 0) {
+    Endpoint::instance().audDevManager().setNullDev();
+  }
   //Endpoint::instance().audDevManager().setNullDev();
 
   if ((info.Length() == 1 && info[0]->IsBoolean() && info[0]->BooleanValue())
@@ -878,6 +881,25 @@ static NAN_METHOD(EPMediaMaxPorts) {
   info.GetReturnValue().Set(Nan::New(ep->mediaMaxPorts()));
 }
 
+
+static NAN_METHOD(GetAudioDevices) {
+  Nan::HandleScope scope;
+
+  Isolate * isolate = info.GetIsolate();
+  Local<Array> devices = Array::New(isolate);
+  AudioDevInfoVector audioDevs = Endpoint::instance().audDevManager().enumDev();
+  if (audioDevs.size() > 0) {
+    for (unsigned int i = 0; i < audioDevs.size(); ++i) {
+      std::string devName = audioDevs.at(i)->name;
+      devices->Set(i, Nan::New(devName.c_str()).ToLocalChecked());
+    }
+  }
+
+  info.GetReturnValue().Set(devices);
+}
+
+
+
 extern "C" {
   void init(Handle<Object> target) {
     Nan::HandleScope scope;
@@ -961,6 +983,10 @@ extern "C" {
     Nan::Set(target,
              Nan::New("createPlaylist").ToLocalChecked(),
              Nan::New<FunctionTemplate>(CreatePlaylist)->GetFunction());
+
+    Nan::Set(target,
+             Nan::New("enumDevs").ToLocalChecked(),
+             Nan::New<FunctionTemplate>(GetAudioDevices)->GetFunction());
   }
 
   NODE_MODULE(sipster, init);
