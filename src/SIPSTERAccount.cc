@@ -7,8 +7,8 @@
 
 Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
 
-regex_t fromuri_regex;
-regex_t touri_regex;
+//regex_t fromuri_regex;
+//regex_t touri_regex;
 
 SIPSTERAccount::SIPSTERAccount() {
 }
@@ -415,6 +415,8 @@ void SIPSTERAccount::onIncomingCall(OnIncomingCallParam &iprm) {
   // pjsip replaces uri info if it exceeds 128 characters, so we have to
   // get the real uris from the original SIP message
   if (ci.remoteUri == "<-error: uri too long->") {
+
+    /* TODO
     msgcstr = iprm.rdata.wholeMsg.c_str();
     regmatch_t match[2];
     res = regexec(&fromuri_regex, msgcstr, 2, match, 0);
@@ -422,10 +424,13 @@ void SIPSTERAccount::onIncomingCall(OnIncomingCallParam &iprm) {
       args->remoteUri = string(msgcstr + match[1].rm_so,
                                match[1].rm_eo - match[1].rm_so);
     }
+    */
+    std::cout << ci.remoteUri << std::endl;
   } else
     args->remoteUri = ci.remoteUri;
 
   if (ci.localUri == "<-error: uri too long->") {
+    /*
     if (!msgcstr)
       msgcstr = iprm.rdata.wholeMsg.c_str();
     regmatch_t match[2];
@@ -434,6 +439,8 @@ void SIPSTERAccount::onIncomingCall(OnIncomingCallParam &iprm) {
       args->localUri = string(msgcstr + match[1].rm_so,
                               match[1].rm_eo - match[1].rm_so);
     }
+    */
+   std::cout << ci.localUri << std::endl;
   } else
     args->localUri = ci.localUri;
 
@@ -785,6 +792,7 @@ void SIPSTERAccount::Initialize(Handle<Object> target) {
 
   SIPSTERAccount_constructor.Reset(tpl);
 
+/*
   int res;
   res = regcomp(&fromuri_regex,
                 "^From:.*(<sip:.+>)",
@@ -807,4 +815,5 @@ void SIPSTERAccount::Initialize(Handle<Object> target) {
     fprintf(stderr, "Could not compile 'To:' URI regex: %s\n", errbuf);
     exit(1);
   }
+  */
 }
