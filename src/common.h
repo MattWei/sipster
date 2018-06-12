@@ -243,6 +243,7 @@ extern Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERTransport_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERBuddy_constructor;
+//extern Nan::Persistent<FunctionTemplate> SIPSTERAudioDevInfo_constructor;
 
 extern Endpoint* ep;
 

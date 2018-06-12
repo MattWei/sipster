@@ -3,6 +3,8 @@
 #include "SIPSTERTransport.h"
 #include "common.h"
 
+#include "SIPSTERAudioDevInfo.h"
+
 #include <iostream>
 
 Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
@@ -607,9 +609,10 @@ NAN_METHOD(SIPSTERAccount::SetTransport) {
 NAN_METHOD(SIPSTERAccount::MakeCall) {
   Nan::HandleScope scope;
 
+  std::cout << "make call param size:" << info.Length() << std::endl;
   string dest;
   CallOpParam prm;
-  bool isAutoConnect = true;
+  int audioDevId = -1;
   if (info.Length() > 0 && info[0]->IsString()) {
     Nan::Utf8String dest_str(info[0]);
     dest = string(*dest_str);
@@ -627,8 +630,30 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
         prm.txOption = sipTxOption;
 
         std::cout << "call param:" << string(*param_str) << std::endl;
-      if (info.Length() > 2) {
-        isAutoConnect = info[2]->BooleanValue();
+      if (info.Length() > 2 && info[2]->IsInt32()) {
+        audioDevId = (int)(info[2]->Int32Value());
+        /*
+        Local<Object> audioDev_obj = info[2]->ToObject();
+
+        Local<Value> val;
+        AudioDevInfo audioDevice;
+        JS2PJ_STR(audioDev_obj, name, audioDevice);
+        JS2PJ_UINT(audioDev_obj, inputCount, audioDevice);
+        JS2PJ_UINT(audioDev_obj, outputCount, audioDevice);
+        JS2PJ_STR(audioDev_obj, driver, audioDevice);
+
+        audioDev = new AudioDevInfo();
+        audioDev->name = audioDevice.name;
+        audioDev->inputCount = audioDevice.inputCount;
+        audioDev->outputCount = audioDevice.outputCount;
+        audioDev->driver = audioDevice.driver;
+
+        std::cout << "Make call to " << dest << " is use audio device:" << audioDevice.name  << std::endl;
+        */
+        /*
+         && Nan::New(SIPSTERAudioDevInfo_constructor)->HasInstance(info[2])
+        audioDev = Nan::ObjectWrap::Unwrap<SIPSTERAudioDevInfo>(Local<Object>::Cast(info[2]));
+        */
         if (info.Length() > 3) {
           prm.statusCode = static_cast<pjsip_status_code>(info[3]->Int32Value());
           if (info.Length() > 4 && info[4]->IsString()) {
@@ -636,6 +661,8 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
             prm.reason = string(*reason_str);
           }
         }
+      } else if (info.Length() > 2 && info[2]->IsBoolean()) {
+        std::cout << "Make call param 3 is not object is boolean" << std::endl; 
       }
     }
   } else
@@ -648,9 +675,31 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
   SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(call_obj);
 
   try {
-    std::cout << "Make call to " << dest << " is auto connect:" << isAutoConnect  << std::endl;
-    call->setAutoConnect(isAutoConnect);
+    #if 0
+    if (audioDev != NULL) {
+      std::cout << "Make call to " << dest << " is use audio device:" << audioDev->name  << std::endl;
+      call->setAudioDevice(audioDev);
+    }
+    #endif
+    AudDevManager& mgr = Endpoint::instance().audDevManager();
+    int oldDeviceId = mgr.getCaptureDev();
+    if (audioDevId >= 0) {
+      call->setAudoConnect(true);
+      if (oldDeviceId != audioDevId) {
+        mgr.setCaptureDev(audioDevId);
+
+        AudioDevInfo devInfo = mgr.getDevInfo(mgr.getCaptureDev());
+        std::cout << "Set Capture dev to " << audioDevId << ", acture id:" << mgr.getCaptureDev() << ",name" << devInfo.name << std::endl;
+      }
+    }
+
     call->makeCall(dest, prm);
+
+    if (audioDevId >= 0 && oldDeviceId != audioDevId) {
+      mgr.setCaptureDev(oldDeviceId);
+      AudioDevInfo devInfo = mgr.getDevInfo(mgr.getCaptureDev());
+      std::cout << "Reset Capture dev to id:" << mgr.getCaptureDev() << ",name" << devInfo.name << std::endl;
+    }
   } catch(Error& err) {
     string errstr = "Call.makeCall() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());

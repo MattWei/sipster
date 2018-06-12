@@ -7,8 +7,8 @@
 Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 
 SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id) {
-  emit = NULL;
   mIsAutoConnect = false;
+  emit = NULL;
   uv_mutex_lock(&async_mutex);
   uv_ref(reinterpret_cast<uv_handle_t*>(&dumb));
   uv_mutex_unlock(&async_mutex);
@@ -17,18 +17,21 @@ SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id) {
 SIPSTERCall::~SIPSTERCall() {
   if (emit)
     delete emit;
+
   uv_mutex_lock(&async_mutex);
   uv_unref(reinterpret_cast<uv_handle_t*>(&dumb));
   uv_mutex_unlock(&async_mutex);
 }
 
-void SIPSTERCall::setAutoConnect(bool isAutoConnect)
+void SIPSTERCall::setAudoConnect(bool isAutoConnect)
 {
   mIsAutoConnect = isAutoConnect;
 }
 
 void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
   if (mIsAutoConnect) {
+    AudDevManager& mgr = Endpoint::instance().audDevManager();
+    
     CallInfo ci = getInfo();
     std::cout << "Auto startTransmit " << ci.media.size() << std::endl;
     // Iterate all the call medias
@@ -37,7 +40,6 @@ void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
             AudioMedia *aud_med = (AudioMedia *)getMedia(i);
 
             // Connect the call audio media to sound device
-            AudDevManager& mgr = Endpoint::instance().audDevManager();
             aud_med->startTransmit(mgr.getPlaybackDevMedia());
             mgr.getCaptureDevMedia().startTransmit(*aud_med);
         }
@@ -354,6 +356,41 @@ NAN_GETTER(SIPSTERCall::IsActiveGetter) {
   info.GetReturnValue().Set(Nan::New(call->isActive()));
 }
 
+NAN_GETTER(SIPSTERCall::CallInfoGetter) {
+  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+
+  CallInfo ci;
+
+  try {
+    ci = call->getInfo();
+  } catch(Error& err) {
+    string errstr = "Call.getInfo() error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  }
+  
+  Local<Object> callInfo = Nan::New<Object>();
+  Nan::Set(callInfo,
+           Nan::New("srcAddress").ToLocalChecked(),
+           Nan::New("localhost").ToLocalChecked());
+  Nan::Set(callInfo,
+           Nan::New("localUri").ToLocalChecked(),
+           Nan::New(ci.localUri.c_str()).ToLocalChecked());
+  Nan::Set(callInfo,
+           Nan::New("remoteUri").ToLocalChecked(),
+           Nan::New(ci.remoteUri.c_str()).ToLocalChecked());
+  Nan::Set(callInfo,
+           Nan::New("localContact").ToLocalChecked(),
+           Nan::New(ci.localContact.c_str()).ToLocalChecked());
+  Nan::Set(callInfo,
+           Nan::New("remoteContact").ToLocalChecked(),
+           Nan::New(ci.remoteContact.c_str()).ToLocalChecked());
+  Nan::Set(callInfo,
+           Nan::New("callId").ToLocalChecked(),
+           Nan::New(ci.callIdString.c_str()).ToLocalChecked());
+
+  info.GetReturnValue().Set(callInfo);
+}
+
 void SIPSTERCall::Initialize(Handle<Object> target) {
   Nan::HandleScope scope;
 
@@ -386,6 +423,9 @@ void SIPSTERCall::Initialize(Handle<Object> target) {
   Nan::SetAccessor(tpl->PrototypeTemplate(),
                    Nan::New("isActive").ToLocalChecked(),
                    IsActiveGetter);
+  Nan::SetAccessor(tpl->PrototypeTemplate(),
+                   Nan::New("callInfo").ToLocalChecked(),
+                   CallInfoGetter);
 
   Nan::Set(target, name, tpl->GetFunction());
 

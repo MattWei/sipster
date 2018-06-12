@@ -16,14 +16,14 @@ using namespace pj;
 class SIPSTERCall : public Call, public Nan::ObjectWrap {
 private:
   bool mIsAutoConnect;
-  
+  //AudioDevInfo *mAudioDev;
 public:
   Nan::Callback* emit;
 
   SIPSTERCall(Account &acc, int call_id=PJSUA_INVALID_ID);
   ~SIPSTERCall();
 
-  void setAutoConnect(bool isAutoConnect);
+  void setAudoConnect(bool isAutoConnect);
   void onCallMediaState(OnCallMediaStateParam &prm);
   virtual void onCallState(OnCallStateParam &prm);
   virtual void onDtmfDigit(OnDtmfDigitParam &prm);
@@ -42,6 +42,8 @@ public:
   static NAN_GETTER(TotDurationGetter);
   static NAN_GETTER(HasMediaGetter);
   static NAN_GETTER(IsActiveGetter);
+  static NAN_GETTER(CallInfoGetter);
+
   static void Initialize(Handle<Object> target);
 };
 
