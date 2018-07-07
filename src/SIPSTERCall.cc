@@ -6,20 +6,22 @@
 
 Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 
-SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id) {
+SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id)
+{
   mIsAutoConnect = false;
   emit = NULL;
   uv_mutex_lock(&async_mutex);
-  uv_ref(reinterpret_cast<uv_handle_t*>(&dumb));
+  uv_ref(reinterpret_cast<uv_handle_t *>(&dumb));
   uv_mutex_unlock(&async_mutex);
 }
 
-SIPSTERCall::~SIPSTERCall() {
+SIPSTERCall::~SIPSTERCall()
+{
   if (emit)
     delete emit;
 
   uv_mutex_lock(&async_mutex);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&dumb));
+  uv_unref(reinterpret_cast<uv_handle_t *>(&dumb));
   uv_mutex_unlock(&async_mutex);
 }
 
@@ -28,23 +30,37 @@ void SIPSTERCall::setAudoConnect(bool isAutoConnect)
   mIsAutoConnect = isAutoConnect;
 }
 
-void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
-  if (mIsAutoConnect) {
-    AudDevManager& mgr = Endpoint::instance().audDevManager();
-    
-    CallInfo ci = getInfo();
+void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm)
+{
+  CallInfo ci = getInfo();
+
+  if (mIsAutoConnect)
+  {
+    AudDevManager &mgr = Endpoint::instance().audDevManager();
     std::cout << "Auto startTransmit " << ci.media.size() << std::endl;
     // Iterate all the call medias
-    for (unsigned i = 0; i < ci.media.size(); i++) {
-        if (ci.media[i].type==PJMEDIA_TYPE_AUDIO && getMedia(i)) {
-            AudioMedia *aud_med = (AudioMedia *)getMedia(i);
+    for (unsigned i = 0; i < ci.media.size(); i++)
+    {
+      CallMediaInfo mediaInfo = ci.media[i];
+      if (mediaInfo.status != PJSUA_CALL_MEDIA_ACTIVE) {
+        std::cout << "onCallMediaState:" << i << ",media status:" <<mediaInfo.status << std::endl;
+        continue;
+      }
 
-            // Connect the call audio media to sound device
-            aud_med->startTransmit(mgr.getPlaybackDevMedia());
-            mgr.getCaptureDevMedia().startTransmit(*aud_med);
-        }
+      std::cout << "StartTransmit:" << i << std::endl;
+
+      if (mediaInfo.type == PJMEDIA_TYPE_AUDIO && getMedia(i))
+      {
+        AudioMedia *aud_med = (AudioMedia *)getMedia(i);
+
+        // Connect the call audio media to sound device
+        aud_med->startTransmit(mgr.getPlaybackDevMedia());
+        mgr.getCaptureDevMedia().startTransmit(*aud_med);
+      }
     }
-  } else {
+  }
+  else
+  {
     SETUP_EVENT_NOARGS(CALLMEDIA);
     ev.call = this;
 
@@ -52,7 +68,8 @@ void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm) {
   }
 }
 
-void SIPSTERCall::onCallState(OnCallStateParam &prm) {
+void SIPSTERCall::onCallState(OnCallStateParam &prm)
+{
   CallInfo ci = getInfo();
 
   SETUP_EVENT(CALLSTATE);
@@ -61,11 +78,12 @@ void SIPSTERCall::onCallState(OnCallStateParam &prm) {
   args->_state = ci.state;
 
   std::cout << "call state:" << ci.state << std::endl;
-  
+
   ENQUEUE_EVENT(ev);
 }
 
-void SIPSTERCall::onDtmfDigit(OnDtmfDigitParam &prm) {
+void SIPSTERCall::onDtmfDigit(OnDtmfDigitParam &prm)
+{
   CallInfo ci = getInfo();
 
   SETUP_EVENT(CALLDTMF);
@@ -76,51 +94,63 @@ void SIPSTERCall::onDtmfDigit(OnDtmfDigitParam &prm) {
   ENQUEUE_EVENT(ev);
 }
 
-NAN_METHOD(SIPSTERCall::New) {
+NAN_METHOD(SIPSTERCall::New)
+{
   Nan::HandleScope scope;
 
   if (!info.IsConstructCall())
     return Nan::ThrowError("Use `new` to create instances of this object.");
 
-  SIPSTERCall* call = NULL;
-  if (info.Length() > 0) {
-    if (Nan::New(SIPSTERAccount_constructor)->HasInstance(info[0])) {
-      Account* acct =
-        Nan::ObjectWrap::Unwrap<SIPSTERAccount>(Local<Object>::Cast(info[0]));
+  SIPSTERCall *call = NULL;
+  if (info.Length() > 0)
+  {
+    if (Nan::New(SIPSTERAccount_constructor)->HasInstance(info[0]))
+    {
+      Account *acct =
+          Nan::ObjectWrap::Unwrap<SIPSTERAccount>(Local<Object>::Cast(info[0]));
       call = new SIPSTERCall(*acct);
-    } else {
-      Local<External> extCall = Local<External>::Cast(info[0]);
-      call = static_cast<SIPSTERCall*>(extCall->Value());
     }
-  } else
+    else
+    {
+      Local<External> extCall = Local<External>::Cast(info[0]);
+      call = static_cast<SIPSTERCall *>(extCall->Value());
+    }
+  }
+  else
     return Nan::ThrowError("Expected callId or Account argument");
 
   call->Wrap(info.This());
 
   call->emit = new Nan::Callback(
-    Local<Function>::Cast(call->handle()->Get(Nan::New(emit_symbol)))
-  );
+      Local<Function>::Cast(call->handle()->Get(Nan::New(emit_symbol))));
 
   info.GetReturnValue().Set(info.This());
 }
 
-NAN_METHOD(SIPSTERCall::Answer) {
+NAN_METHOD(SIPSTERCall::Answer)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsUint32()) {
+  if (info.Length() > 0 && info[0]->IsUint32())
+  {
     prm.statusCode = static_cast<pjsip_status_code>(info[0]->Int32Value());
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String reason_str(info[1]);
       prm.reason = string(*reason_str);
     }
-  } else
+  }
+  else
     prm.statusCode = PJSIP_SC_OK;
 
-  try {
+  try
+  {
     call->answer(prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.answer() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -128,22 +158,28 @@ NAN_METHOD(SIPSTERCall::Answer) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::Hangup) {
+NAN_METHOD(SIPSTERCall::Hangup)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsUint32()) {
+  if (info.Length() > 0 && info[0]->IsUint32())
+  {
     prm.statusCode = static_cast<pjsip_status_code>(info[0]->Int32Value());
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String reason_str(info[1]);
       prm.reason = string(*reason_str);
     }
   }
 
-  try {
+  try
+  {
     call->hangup(prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.hangup() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -151,22 +187,28 @@ NAN_METHOD(SIPSTERCall::Hangup) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::SetHold) {
+NAN_METHOD(SIPSTERCall::SetHold)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsUint32()) {
+  if (info.Length() > 0 && info[0]->IsUint32())
+  {
     prm.statusCode = static_cast<pjsip_status_code>(info[0]->Int32Value());
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String reason_str(info[1]);
       prm.reason = string(*reason_str);
     }
   }
 
-  try {
+  try
+  {
     call->setHold(prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.setHold() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -174,22 +216,28 @@ NAN_METHOD(SIPSTERCall::SetHold) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::Reinvite) {
+NAN_METHOD(SIPSTERCall::Reinvite)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsUint32()) {
+  if (info.Length() > 0 && info[0]->IsUint32())
+  {
     prm.statusCode = static_cast<pjsip_status_code>(info[0]->Int32Value());
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String reason_str(info[1]);
       prm.reason = string(*reason_str);
     }
   }
 
-  try {
+  try
+  {
     call->reinvite(prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.reinvite() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -197,22 +245,28 @@ NAN_METHOD(SIPSTERCall::Reinvite) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::Update) {
+NAN_METHOD(SIPSTERCall::Update)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsUint32()) {
+  if (info.Length() > 0 && info[0]->IsUint32())
+  {
     prm.statusCode = static_cast<pjsip_status_code>(info[0]->Int32Value());
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String reason_str(info[1]);
       prm.reason = string(*reason_str);
     }
   }
 
-  try {
+  try
+  {
     call->update(prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.update() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -220,46 +274,60 @@ NAN_METHOD(SIPSTERCall::Update) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::DialDtmf) {
+NAN_METHOD(SIPSTERCall::DialDtmf)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
-  if (info.Length() > 0 && info[0]->IsString()) {
-    try {
+  if (info.Length() > 0 && info[0]->IsString())
+  {
+    try
+    {
       Nan::Utf8String dtmf_str(info[0]);
       call->dialDtmf(string(*dtmf_str));
-    } catch(Error& err) {
+    }
+    catch (Error &err)
+    {
       string errstr = "Call.dialDtmf() error: " + err.info();
       return Nan::ThrowError(errstr.c_str());
     }
-  } else
+  }
+  else
     return Nan::ThrowTypeError("Missing DTMF string");
 
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::Transfer) {
+NAN_METHOD(SIPSTERCall::Transfer)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   string dest;
   CallOpParam prm;
-  if (info.Length() > 0 && info[0]->IsString()) {
+  if (info.Length() > 0 && info[0]->IsString())
+  {
     Nan::Utf8String dest_str(info[0]);
     dest = string(*dest_str);
-    if (info.Length() > 1) {
+    if (info.Length() > 1)
+    {
       prm.statusCode = static_cast<pjsip_status_code>(info[1]->Int32Value());
-      if (info.Length() > 2 && info[2]->IsString()) {
+      if (info.Length() > 2 && info[2]->IsString())
+      {
         Nan::Utf8String reason_str(info[2]);
         prm.reason = string(*reason_str);
       }
     }
-  } else
+  }
+  else
     return Nan::ThrowTypeError("Missing transfer destination");
 
-  try {
+  try
+  {
     call->xfer(dest, prm);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.xfer() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -267,42 +335,50 @@ NAN_METHOD(SIPSTERCall::Transfer) {
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::DoRef) {
+NAN_METHOD(SIPSTERCall::DoRef)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   call->Ref();
 
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::DoUnref) {
+NAN_METHOD(SIPSTERCall::DoUnref)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   call->Unref();
 
   info.GetReturnValue().SetUndefined();
 }
 
-NAN_METHOD(SIPSTERCall::GetStats) {
+NAN_METHOD(SIPSTERCall::GetStats)
+{
   Nan::HandleScope scope;
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   bool with_media = true;
   string indent = "  ";
-  if (info.Length() > 0 && info[0]->IsBoolean()) {
+  if (info.Length() > 0 && info[0]->IsBoolean())
+  {
     with_media = info[0]->BooleanValue();
-    if (info.Length() > 1 && info[1]->IsString()) {
+    if (info.Length() > 1 && info[1]->IsString())
+    {
       Nan::Utf8String indent_str(info[1]);
       indent = string(*indent_str);
     }
   }
 
   string stats_info;
-  try {
+  try
+  {
     stats_info = call->dump(with_media, indent);
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.dump() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -310,14 +386,18 @@ NAN_METHOD(SIPSTERCall::GetStats) {
   info.GetReturnValue().Set(Nan::New(stats_info.c_str()).ToLocalChecked());
 }
 
-NAN_GETTER(SIPSTERCall::ConDurationGetter) {
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+NAN_GETTER(SIPSTERCall::ConDurationGetter)
+{
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallInfo ci;
 
-  try {
+  try
+  {
     ci = call->getInfo();
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.getInfo() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -327,14 +407,18 @@ NAN_GETTER(SIPSTERCall::ConDurationGetter) {
   info.GetReturnValue().Set(Nan::New<Number>(duration));
 }
 
-NAN_GETTER(SIPSTERCall::TotDurationGetter) {
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+NAN_GETTER(SIPSTERCall::TotDurationGetter)
+{
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallInfo ci;
 
-  try {
+  try
+  {
     ci = call->getInfo();
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.getInfo() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
@@ -344,30 +428,36 @@ NAN_GETTER(SIPSTERCall::TotDurationGetter) {
   info.GetReturnValue().Set(Nan::New<Number>(duration));
 }
 
-NAN_GETTER(SIPSTERCall::HasMediaGetter) {
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+NAN_GETTER(SIPSTERCall::HasMediaGetter)
+{
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   info.GetReturnValue().Set(Nan::New(call->hasMedia()));
 }
 
-NAN_GETTER(SIPSTERCall::IsActiveGetter) {
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+NAN_GETTER(SIPSTERCall::IsActiveGetter)
+{
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   info.GetReturnValue().Set(Nan::New(call->isActive()));
 }
 
-NAN_GETTER(SIPSTERCall::CallInfoGetter) {
-  SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
+NAN_GETTER(SIPSTERCall::CallInfoGetter)
+{
+  SIPSTERCall *call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(info.This());
 
   CallInfo ci;
 
-  try {
+  try
+  {
     ci = call->getInfo();
-  } catch(Error& err) {
+  }
+  catch (Error &err)
+  {
     string errstr = "Call.getInfo() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
-  
+
   Local<Object> callInfo = Nan::New<Object>();
   Nan::Set(callInfo,
            Nan::New("srcAddress").ToLocalChecked(),
@@ -391,7 +481,8 @@ NAN_GETTER(SIPSTERCall::CallInfoGetter) {
   info.GetReturnValue().Set(callInfo);
 }
 
-void SIPSTERCall::Initialize(Handle<Object> target) {
+void SIPSTERCall::Initialize(Handle<Object> target)
+{
   Nan::HandleScope scope;
 
   Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);

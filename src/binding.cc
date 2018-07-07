@@ -274,6 +274,10 @@ void dumb_cb(uv_async_t *handle)
                 Nan::ObjectWrap::Unwrap<SIPSTERMedia>(med_obj);
             med->media = media;
             med->dir = ci.media[i].dir;
+            med->status = ci.media[i].status;
+
+            std::cout << "media " << i << " status " << ci.media[i].status << std::endl;
+            
             /*if (ci.media[i].status == PJSUA_CALL_MEDIA_ACTIVE) {
                 try {
                   MediaTransportInfo mti = call->getMedTransportInfo(i);

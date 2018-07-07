@@ -19,6 +19,7 @@ public:
   AudioMedia* media;
   bool is_media_new;
   pjmedia_dir dir;
+  pjsua_call_media_status status;
   string srcRTP;
   string srcRTCP;
   
@@ -37,6 +38,7 @@ public:
   static NAN_GETTER(RxLevelGetter);
   static NAN_GETTER(TxLevelGetter);
   static NAN_GETTER(DirGetter);
+  static NAN_GETTER(StatusGetter);
   static NAN_GETTER(SrcRTPGetter);
   static NAN_GETTER(SrcRTCPGetter);
   
