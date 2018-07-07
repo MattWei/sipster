@@ -14,7 +14,7 @@
       'include_dirs': [
         "src",
         "<!(node -e \"require('nan')\")",
-        "../pjsip/include"
+        "libpjsip_win/include"
       ],
       'conditions': [
         [ 'OS!="win"', {
@@ -69,7 +69,8 @@
               "-llibpjproject-Static.lib",
               "-lwsock32.lib",
               "-lws2_32.lib",
-              "-ldsound.lib"
+              "-ldsound.lib",
+              "-lole32.lib"
             ]
           },
           "configurations": {
@@ -90,7 +91,7 @@
                                         "LinkTimeCodeGeneration": 1,
                                         "LinkIncremental": 1,
                                         "AdditionalLibraryDirectories": [
-                                            "D:/workspace/ionic_project/pjsip/debug/"
+                                            "../libpjsip_win/x86/debug"
                                         ]
                                     }
                                 }
@@ -123,14 +124,14 @@
                                         "EnableCOMDATFolding": 2,
                                         "LinkIncremental": 1,
                                         "AdditionalLibraryDirectories": [
-                                            "D:/workspace/ionic_project/pjsip/release/"
+                                            "../libpjsip_win/x86/release/"
                                         ]
                                     }
                                 }
                             }
                         },
           'include_dirs': [
-              "D:/workspace/ionic_project/pjsip/include/",
+              "libpjsip_win/include",
           ],
           # end gyp stupidity workaround =======================================
 
