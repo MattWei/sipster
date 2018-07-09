@@ -147,9 +147,10 @@ struct EV_ARGS_INCALL {
 // =============================================================================
 
 // call state change event(s) ==================================================
-#define N_CALLSTATE_FIELDS 1
+#define N_CALLSTATE_FIELDS 2
 #define CALLSTATE_FIELDS                                                       \
-  X(CALLSTATE, pjsip_inv_state, _state, Integer, _state)
+  X(CALLSTATE, pjsip_inv_state, _state, Integer, _state)                       \
+  X(CALLSTATE, int, _lastStatuscode, Integer, _lastStatuscode)
 struct EV_ARGS_CALLSTATE {
 #define X(kind, ctype, name, v8type, valconv) ctype name;
   CALLSTATE_FIELDS

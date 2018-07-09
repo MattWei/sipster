@@ -8,6 +8,8 @@ Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 
 SIPSTERCall::SIPSTERCall(Account &acc, int call_id) : Call(acc, call_id)
 {
+  mCallState = START_TONE;
+  mTonePlayer = NULL;
   mIsAutoConnect = false;
   emit = NULL;
   uv_mutex_lock(&async_mutex);
@@ -30,34 +32,97 @@ void SIPSTERCall::setAudoConnect(bool isAutoConnect)
   mIsAutoConnect = isAutoConnect;
 }
 
-void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm)
+void SIPSTERCall::onTonePlayFinish()
 {
-  CallInfo ci = getInfo();
+  if (mCallState == START_TONE) {
+    mCallState = MIC_CALLING;
+    delete mTonePlayer;
+    mTonePlayer = NULL;
+    connectCaptureDevice();
+  } else if (mCallState == STOP_TONE) {
+    delete mTonePlayer;
+    mTonePlayer = NULL;
+    mCallState = STOPED;
 
-  if (mIsAutoConnect)
-  {
+    CallOpParam prm(true);
+    Call::hangup(prm);
+  }
+}
+
+void SIPSTERCall::setTones(std::string startTone, std::string stopTone)
+{
+  mStartTone = startTone;
+  mStopTone = stopTone;
+  std::cout << "Set start tone:" << mStartTone << ",stop tone:" << mStopTone << std::endl;
+}
+
+void SIPSTERCall::connectCaptureDevice()
+{
+    mCallState = MIC_CALLING;
+
+    CallInfo ci = getInfo();
     AudDevManager &mgr = Endpoint::instance().audDevManager();
-    std::cout << "Auto startTransmit " << ci.media.size() << std::endl;
-    // Iterate all the call medias
     for (unsigned i = 0; i < ci.media.size(); i++)
     {
       CallMediaInfo mediaInfo = ci.media[i];
-      if (mediaInfo.status != PJSUA_CALL_MEDIA_ACTIVE) {
-        std::cout << "onCallMediaState:" << i << ",media status:" <<mediaInfo.status << std::endl;
-        continue;
-      }
-
-      std::cout << "StartTransmit:" << i << std::endl;
-
-      if (mediaInfo.type == PJMEDIA_TYPE_AUDIO && getMedia(i))
+      AudioMedia *aud_med = (AudioMedia *)getMedia(i);
+      if (mediaInfo.type == PJMEDIA_TYPE_AUDIO && aud_med)
       {
-        AudioMedia *aud_med = (AudioMedia *)getMedia(i);
-
-        // Connect the call audio media to sound device
-        aud_med->startTransmit(mgr.getPlaybackDevMedia());
-        mgr.getCaptureDevMedia().startTransmit(*aud_med);
+        if (mediaInfo.status == PJSUA_CALL_MEDIA_ACTIVE) {
+          mgr.getCaptureDevMedia().startTransmit(*aud_med);
+        } else if (mediaInfo.status == PJSUA_CALL_MEDIA_LOCAL_HOLD || 
+          mediaInfo.status == PJSUA_CALL_MEDIA_REMOTE_HOLD) {
+          mgr.getCaptureDevMedia().stopTransmit(*aud_med);
+        }
       }
     }
+}
+
+void SIPSTERCall::playTone(std::string tonePath)
+{
+  if (!mTonePlayer) {
+    mTonePlayer = new TonePlayer(this);
+    mTonePlayer->createPlayer(tonePath, PJMEDIA_FILE_NO_LOOP);
+  }
+
+  AudDevManager &mgr = Endpoint::instance().audDevManager();
+  CallInfo ci = getInfo();
+  for (unsigned i = 0; i < ci.media.size(); i++) {
+      CallMediaInfo mediaInfo = ci.media[i];
+      AudioMedia *aud_med = (AudioMedia *)getMedia(i);
+      if (mediaInfo.type == PJMEDIA_TYPE_AUDIO && aud_med)
+      {
+        mgr.getCaptureDevMedia().stopTransmit(*aud_med);
+        if (mediaInfo.status == PJSUA_CALL_MEDIA_ACTIVE) {
+          mTonePlayer->startTransmit(*aud_med);
+        } else if (mediaInfo.status == PJSUA_CALL_MEDIA_LOCAL_HOLD || 
+          mediaInfo.status == PJSUA_CALL_MEDIA_REMOTE_HOLD) {
+          mTonePlayer->stopTransmit(*aud_med);
+        }
+      }
+  }
+}
+
+void SIPSTERCall::micCallMediaStateChanged()
+{
+    if (mCallState == START_TONE && mStartTone != "") {
+      playTone(mStartTone);
+      return;
+    } 
+    
+    if (mCallState == STOP_TONE && mStopTone != "") {
+      playTone(mStopTone);
+      return;
+    }
+
+    connectCaptureDevice();
+}
+
+void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm)
+{
+  if (mIsAutoConnect)
+  {
+    micCallMediaStateChanged();
   }
   else
   {
@@ -65,6 +130,22 @@ void SIPSTERCall::onCallMediaState(OnCallMediaStateParam &prm)
     ev.call = this;
 
     ENQUEUE_EVENT(ev);
+  }
+}
+
+void SIPSTERCall::hangup(const CallOpParam &prm)
+{
+  if (mCallState == START_TONE && mTonePlayer) {
+    delete mTonePlayer;
+    mTonePlayer = NULL;
+  }
+  
+  mCallState = STOP_TONE;
+  if (mStopTone != "") {
+    playTone(mStopTone);
+  } else {
+    mCallState = STOPED;
+    Call::hangup(prm);
   }
 }
 
@@ -76,8 +157,8 @@ void SIPSTERCall::onCallState(OnCallStateParam &prm)
   ev.call = this;
 
   args->_state = ci.state;
-
-  std::cout << "call state:" << ci.state << std::endl;
+  args->_lastStatuscode = ci.lastStatusCode;
+  //std::cout << "######call state:" << ci.state << "," << ci.lastStatusCode << std::endl;
 
   ENQUEUE_EVENT(ev);
 }

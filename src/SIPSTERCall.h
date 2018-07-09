@@ -13,20 +13,38 @@ using namespace node;
 using namespace v8;
 using namespace pj;
 
+class TonePlayer;
+
 class SIPSTERCall : public Call, public Nan::ObjectWrap {
 private:
+  enum MicCallState { START_TONE, MIC_CALLING, STOP_TONE, STOPED };
+
   bool mIsAutoConnect;
-  //AudioDevInfo *mAudioDev;
+  std::string mStartTone;
+  std::string mStopTone;
+  MicCallState mCallState;
+
+  TonePlayer *mTonePlayer;
+
+  void micCallMediaStateChanged();
+  void connectCaptureDevice();
+  void playTone(std::string tonePath);
+
 public:
   Nan::Callback* emit;
 
   SIPSTERCall(Account &acc, int call_id=PJSUA_INVALID_ID);
   ~SIPSTERCall();
+  void onTonePlayFinish();
 
   void setAudoConnect(bool isAutoConnect);
+  void setTones(std::string startTone, std::string stopTone);
+
   void onCallMediaState(OnCallMediaStateParam &prm);
   virtual void onCallState(OnCallStateParam &prm);
   virtual void onDtmfDigit(OnDtmfDigitParam &prm);
+  virtual void hangup(const CallOpParam &prm);
+
   static NAN_METHOD(New);
   static NAN_METHOD(Answer);
   static NAN_METHOD(Hangup);
@@ -47,4 +65,22 @@ public:
   static void Initialize(Handle<Object> target);
 };
 
+class TonePlayer : public AudioMediaPlayer
+{
+private:
+  SIPSTERCall *mCall;
+
+public:
+  TonePlayer(SIPSTERCall* call) : mCall(call) {}
+  ~TonePlayer() {}
+
+  virtual bool onEof()
+  {
+    if (mCall) {
+      mCall->onTonePlayFinish();
+    }
+
+    return true;
+  }
+};
 #endif

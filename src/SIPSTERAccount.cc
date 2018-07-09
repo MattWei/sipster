@@ -613,6 +613,9 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
   string dest;
   CallOpParam prm;
   int audioDevId = -1;
+  string startTonePath = "";
+  string stopTonePath = "";
+
   if (info.Length() > 0 && info[0]->IsString()) {
     Nan::Utf8String dest_str(info[0]);
     dest = string(*dest_str);
@@ -632,37 +635,14 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
         std::cout << "call param:" << string(*param_str) << std::endl;
       if (info.Length() > 2 && info[2]->IsInt32()) {
         audioDevId = (int)(info[2]->Int32Value());
-        /*
-        Local<Object> audioDev_obj = info[2]->ToObject();
-
-        Local<Value> val;
-        AudioDevInfo audioDevice;
-        JS2PJ_STR(audioDev_obj, name, audioDevice);
-        JS2PJ_UINT(audioDev_obj, inputCount, audioDevice);
-        JS2PJ_UINT(audioDev_obj, outputCount, audioDevice);
-        JS2PJ_STR(audioDev_obj, driver, audioDevice);
-
-        audioDev = new AudioDevInfo();
-        audioDev->name = audioDevice.name;
-        audioDev->inputCount = audioDevice.inputCount;
-        audioDev->outputCount = audioDevice.outputCount;
-        audioDev->driver = audioDevice.driver;
-
-        std::cout << "Make call to " << dest << " is use audio device:" << audioDevice.name  << std::endl;
-        */
-        /*
-         && Nan::New(SIPSTERAudioDevInfo_constructor)->HasInstance(info[2])
-        audioDev = Nan::ObjectWrap::Unwrap<SIPSTERAudioDevInfo>(Local<Object>::Cast(info[2]));
-        */
-        if (info.Length() > 3) {
-          prm.statusCode = static_cast<pjsip_status_code>(info[3]->Int32Value());
+        if (info.Length() > 3 && info[3]->IsString()) {
+          Nan::Utf8String startTone(info[3]);
+          startTonePath = string(*startTone);
           if (info.Length() > 4 && info[4]->IsString()) {
-            Nan::Utf8String reason_str(info[4]);
-            prm.reason = string(*reason_str);
+            Nan::Utf8String stopTone(info[4]);
+            stopTonePath = string(*stopTone);
           }
         }
-      } else if (info.Length() > 2 && info[2]->IsBoolean()) {
-        std::cout << "Make call param 3 is not object is boolean" << std::endl; 
       }
     }
   } else
@@ -675,16 +655,11 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
   SIPSTERCall* call = Nan::ObjectWrap::Unwrap<SIPSTERCall>(call_obj);
 
   try {
-    #if 0
-    if (audioDev != NULL) {
-      std::cout << "Make call to " << dest << " is use audio device:" << audioDev->name  << std::endl;
-      call->setAudioDevice(audioDev);
-    }
-    #endif
     AudDevManager& mgr = Endpoint::instance().audDevManager();
     int oldDeviceId = mgr.getCaptureDev();
     if (audioDevId >= 0) {
       call->setAudoConnect(true);
+      call->setTones(startTonePath, stopTonePath);
       if (oldDeviceId != audioDevId) {
         mgr.setCaptureDev(audioDevId);
 

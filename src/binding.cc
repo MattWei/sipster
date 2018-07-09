@@ -224,11 +224,11 @@ void dumb_cb(uv_async_t *handle)
         ev_name = Nan::New(ev_CALLSTATE_connecting_symbol);
         break;
       case PJSIP_INV_STATE_CONFIRMED:
-        std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_CONFIRMED << std::endl;
+        //std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_CONFIRMED << std::endl;
         ev_name = Nan::New(ev_CALLSTATE_confirmed_symbol);
         break;
       case PJSIP_INV_STATE_DISCONNECTED:
-        std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_DISCONNECTED << std::endl;
+        //std::cout << "EVENT_CALLSTATE:" << args->_state << "," << PJSIP_INV_STATE_DISCONNECTED << std::endl;
         ev_name = Nan::New(ev_CALLSTATE_disconnected_symbol);
         break;
       default:
@@ -242,10 +242,11 @@ void dumb_cb(uv_async_t *handle)
         if (call->emit && !call->persistent().IsEmpty())
         {
           call->emit->Call(call->handle(), 1, emit_argv);
-          Local<Value> emit_catchall_argv[2] = {
+          Local<Value> emit_catchall_argv[3] = {
               Nan::New(ev_CALLSTATE_state_symbol),
-              ev_name};
-          call->emit->Call(call->handle(), 2, emit_catchall_argv);
+              ev_name,
+              Nan::New(args->_lastStatuscode)};
+          call->emit->Call(call->handle(), 3, emit_catchall_argv);
         }
       }
       delete args;
@@ -824,8 +825,10 @@ static NAN_METHOD(EPInit)
   {
     ep_cfg.medConfig.clockRate = 44100;
     ep_cfg.medConfig.sndClockRate = 44100;
+    ep_cfg.medConfig.noVad = 1;
     ep->libInit(ep_cfg);
     ep->codecSetPriority("L16/44100/1", 139);
+    
     ep_init = true;
   }
   catch (Error &err)
@@ -873,6 +876,29 @@ static NAN_METHOD(EPStart)
   {
     ep->libStart();
     ep_start = true;
+  }
+  catch (Error &err)
+  {
+    string errstr = "libStart error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  }
+  info.GetReturnValue().SetUndefined();
+}
+
+static NAN_METHOD(EPDestory)
+{
+  Nan::HandleScope scope;
+
+  if (!ep_start)
+    return Nan::ThrowError("Not started");
+
+  try
+  {
+    ep->libDestroy();
+
+    ep_start = false;
+    ep_create = false;
+    ep_init = false;
   }
   catch (Error &err)
   {
@@ -1075,6 +1101,9 @@ extern "C"
     Nan::Set(target,
              Nan::New("start").ToLocalChecked(),
              Nan::New<FunctionTemplate>(EPStart)->GetFunction());
+    Nan::Set(target,
+             Nan::New("destory").ToLocalChecked(),
+             Nan::New<FunctionTemplate>(EPDestory)->GetFunction());
     Nan::Set(target,
              Nan::New("hangupAllCalls").ToLocalChecked(),
              Nan::New<FunctionTemplate>(EPHangupAllCalls)->GetFunction());
