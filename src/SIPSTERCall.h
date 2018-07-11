@@ -15,27 +15,35 @@ using namespace pj;
 
 class TonePlayer;
 
+enum PlayerType {START_TONE, STOP_TONE, MUSIC};
+
 class SIPSTERCall : public Call, public Nan::ObjectWrap {
 private:
-  enum MicCallState { START_TONE, MIC_CALLING, STOP_TONE, STOPED };
+  enum MicCallState { PLAY_START_TONE, MIC_CALLING, PLAY_STOP_TONE, STOPED };
 
   bool mIsAutoConnect;
   std::string mStartTone;
   std::string mStopTone;
   MicCallState mCallState;
 
+  std::string mCurrentSong = "";
   TonePlayer *mTonePlayer;
 
   void micCallMediaStateChanged();
   void connectCaptureDevice();
   void playTone(std::string tonePath);
 
+  void playMusic();
+
+  void sendPlayState(std::string song, int type, int param);
 public:
   Nan::Callback* emit;
 
   SIPSTERCall(Account &acc, int call_id=PJSUA_INVALID_ID);
   ~SIPSTERCall();
-  void onTonePlayFinish();
+
+  void createPlayer(std::string song);
+  void onPlayEof(PlayerType type);
 
   void setAudoConnect(bool isAutoConnect);
   void setTones(std::string startTone, std::string stopTone);
@@ -44,6 +52,7 @@ public:
   virtual void onCallState(OnCallStateParam &prm);
   virtual void onDtmfDigit(OnDtmfDigitParam &prm);
   virtual void hangup(const CallOpParam &prm);
+  virtual void changeMusic(std::string musicPath);
 
   static NAN_METHOD(New);
   static NAN_METHOD(Answer);
@@ -56,6 +65,7 @@ public:
   static NAN_METHOD(DoRef);
   static NAN_METHOD(DoUnref);
   static NAN_METHOD(GetStats);
+  static NAN_METHOD(PlayMusic);
   static NAN_GETTER(ConDurationGetter);
   static NAN_GETTER(TotDurationGetter);
   static NAN_GETTER(HasMediaGetter);
@@ -67,20 +77,21 @@ public:
 
 class TonePlayer : public AudioMediaPlayer
 {
-private:
-  SIPSTERCall *mCall;
-
 public:
-  TonePlayer(SIPSTERCall* call) : mCall(call) {}
+  TonePlayer(SIPSTERCall* call, PlayerType type) : mCall(call), mType(START_TONE) {}
   ~TonePlayer() {}
 
   virtual bool onEof()
   {
     if (mCall) {
-      mCall->onTonePlayFinish();
+      mCall->onPlayEof(mType);
     }
 
     return true;
   }
+
+private:
+  SIPSTERCall *mCall;
+  PlayerType mType;
 };
 #endif

@@ -80,7 +80,7 @@ NAN_METHOD(SIPSTERBuddy::SendInstantMessage) {
 
 NAN_METHOD(SIPSTERBuddy::SubscribePresence) {
   Nan::HandleScope scope;
-
+  /*
   bool isSubscribePresence = false;
   if (info.Length() > 0 && info[0]->IsBoolean()) {
     isSubscribePresence = info[0]->BooleanValue();
@@ -94,8 +94,9 @@ NAN_METHOD(SIPSTERBuddy::SubscribePresence) {
     string errstr = "Buddy.SubscribePresence() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
   }
-
+  
   std::cout << "SIPSTERBuddy::SubscribePresence: " << isSubscribePresence << std::endl;
+  */
   info.GetReturnValue().SetUndefined();
 }
 

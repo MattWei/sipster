@@ -176,7 +176,7 @@ pj_status_t HPlayer::fileFillBuffer()
 
 		if (currentMusic->isStartPos()) {
 			int timeOnSeconds = currentMusic->fSize * 8 / afd->avg_bps;
-			LOGI(THIS_FILE, "File %s start play length:%d", currentMusic->path.c_str(), timeOnSeconds);
+			LOGI(THIS_FILE, "File %s start play length:%d \n", currentMusic->path.c_str(), timeOnSeconds);
 			pushMessage(currentMusic->path, MessageType::START, timeOnSeconds);
 		}
 		            
@@ -568,7 +568,7 @@ pj_status_t HPlayer::addFileToPlaylist(pj_pool_t *pool, const std::string &filen
 	        has_wave_info = PJ_TRUE;
 
             LOGI(THIS_FILE,
-                 "WAV playlist afd: samp.rate=%d, ch=%d, bits_per_sample=%d",
+                 "WAV playlist afd: samp.rate=%d, ch=%d, bits_per_sample=%d \n",
                  afd->clock_rate,
                  afd->channel_count,
                  afd->bits_per_sample);
@@ -638,7 +638,7 @@ PJ_DEF(pj_status_t) HPlayer::wavPlaylistCreate(pj_pool_t *pool,
 
     /* Normalize port_label */
     if (port_label == NULL || port_label->slen == 0) {
-	    tmp_port_label = pj_str("WAV playlist");
+	    tmp_port_label = pj_str("HPlayer");
 	    port_label = &tmp_port_label;
     }
 
@@ -685,7 +685,7 @@ PJ_DEF(pj_status_t) HPlayer::wavPlaylistCreate(pj_pool_t *pool,
     *p_port = &playerPort->base;
     
     LOGI(THIS_FILE,
-	     "WAV playlist '%.*s' created: samp.rate=%d, ch=%d, bufsize=%uKB",
+	     "WAV playlist '%.*s' created: samp.rate=%d, ch=%d, bufsize=%uKB \n",
 	     (int)port_label->slen,
 	     port_label->ptr,
 	     afd->clock_rate,
@@ -735,8 +735,8 @@ PJ_DEF(pj_status_t) HPlayer::createListPlayer(const std::string &fileName,
 	    goto on_error;
     }
 
-    LOGI(THIS_FILE, "file_id:%d, samples_per_frame:%d, clock_rate:%d",
-            file_id, pjsua_var.mconf_cfg.samples_per_frame, pjsua_var.media_cfg.clock_rate);
+    //LOGI(THIS_FILE, "file_id:%d, samples_per_frame:%d, clock_rate:%d\n",
+    //        file_id, pjsua_var.mconf_cfg.samples_per_frame, pjsua_var.media_cfg.clock_rate);
 
     if (pjsua_var.media_cfg.clock_rate != 0) {
         ptime = pjsua_var.mconf_cfg.samples_per_frame * 1000 /

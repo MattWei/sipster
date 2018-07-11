@@ -215,6 +215,15 @@ struct EV_ARGS_CALLDTMF {
 #undef X
 };
 
+#define N_PLAYEREOF_FIELDS 1
+#define PLAYEREOF_FIELDS                                                        \
+  X(PLAYEREOF, string, song, String, song.c_str())
+struct EV_ARGS_PLAYEREOF {
+#define X(kind, ctype, name, v8type, valconv) ctype name;
+  PLAYEREOF_FIELDS
+#undef X
+};
+
 #define X(kind, ctype, name, v8type, valconv)                                  \
   extern Nan::Persistent<String> kind##_##name##_symbol;
   INCALL_FIELDS

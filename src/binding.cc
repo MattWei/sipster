@@ -421,7 +421,7 @@ void dumb_cb(uv_async_t *handle)
 
       EV_ARGS_PLAYERSTATUS *args =
           reinterpret_cast<EV_ARGS_PLAYERSTATUS *>(ev.args);
-      SIPSTERMedia *media = ev.media;
+      SIPSTERCall *call = ev.call;
 
       Local<Value> emit_argv[N_PLAYERSTATUS_FIELDS] = {
           Nan::New(ev_PLAYERSTATUS_playerStatus_symbol),
@@ -432,9 +432,9 @@ void dumb_cb(uv_async_t *handle)
       //std::cout << "dumb_cb EVENT_PLAYERSTATUS, field size:"
       //          << N_PLAYERSTATUS_FIELDS << "," << args->songPath
       //          << "," << args->type << "," << args->param << std::endl;
-      if (media && media->emit)
+      if (call && call->emit)
       {
-        media->emit->Call(media->handle(), N_PLAYERSTATUS_FIELDS, emit_argv);
+        call->emit->Call(call->handle(), N_PLAYERSTATUS_FIELDS, emit_argv);
       }
       else
       {
@@ -826,6 +826,7 @@ static NAN_METHOD(EPInit)
     ep_cfg.medConfig.clockRate = 44100;
     ep_cfg.medConfig.sndClockRate = 44100;
     ep_cfg.medConfig.noVad = 1;
+    std::cout << "#######ep_cfg.medConfig.noVad=" << ep_cfg.medConfig.noVad << std::endl;
     ep->libInit(ep_cfg);
     ep->codecSetPriority("L16/44100/1", 139);
     

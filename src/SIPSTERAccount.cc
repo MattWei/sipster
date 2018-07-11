@@ -666,6 +666,13 @@ NAN_METHOD(SIPSTERAccount::MakeCall) {
         AudioDevInfo devInfo = mgr.getDevInfo(mgr.getCaptureDev());
         std::cout << "Set Capture dev to " << audioDevId << ", acture id:" << mgr.getCaptureDev() << ",name" << devInfo.name << std::endl;
       }
+    } else {
+      if (startTonePath == "") {
+        string errstr = "Make file Call() error: music is empty";
+        return Nan::ThrowError(errstr.c_str());
+      }
+
+      call->createPlayer(startTonePath);
     }
 
     call->makeCall(dest, prm);
@@ -690,15 +697,15 @@ NAN_METHOD(SIPSTERAccount::AddBuddy) {
   std::cout << "SIPSTERAccount::AddBuddy" << std::endl;
   
   string buddyUri;
-  bool isSubscribePresence = false;
+  //bool isSubscribePresence = false;
 
   if (info.Length() > 0 && info[0]->IsString()) {
     Nan::Utf8String dest_str(info[0]);
     buddyUri = string(*dest_str);
 
-    if (info.Length() > 1 && info[1]->IsBoolean()) {
-      isSubscribePresence = info[1]->BooleanValue();
-    }
+    //if (info.Length() > 1 && info[1]->IsBoolean()) {
+    //  isSubscribePresence = info[1]->BooleanValue();
+    //}
   } else
     return Nan::ThrowTypeError("Missing call destination");
 
@@ -712,10 +719,11 @@ NAN_METHOD(SIPSTERAccount::AddBuddy) {
   try {
     BuddyConfig cfg;
     cfg.uri = buddyUri;
+    cfg.subscribe = false;
     buddy->create(*(acct), cfg);
-    buddy->subscribePresence(isSubscribePresence);
+    //buddy->subscribePresence(false);
     acct->addBuddy(buddy);
-    std::cout << "Add buddy " << buddyUri << "is subscribe presence " << isSubscribePresence << std::endl;
+    //std::cout << "Add buddy " << buddyUri << "is subscribe presence " << isSubscribePresence << std::endl;
   } catch(Error& err) {
     string errstr = "Buddy.creak() error: " + err.info();
     return Nan::ThrowError(errstr.c_str());
