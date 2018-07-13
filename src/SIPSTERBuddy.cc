@@ -8,11 +8,8 @@ Nan::Persistent<FunctionTemplate> SIPSTERBuddy_constructor;
 SIPSTERBuddy::SIPSTERBuddy() {
 }
 SIPSTERBuddy::~SIPSTERBuddy() {
-  std::cout << "Delete buddy" << std::endl;
   if (emit) {
-    std::cout << "Delete buddy emit" << std::endl;
     delete emit;
-    std::cout << "Delete buddy emit succeed" << std::endl;
   }
     
   std::cout << "SIPSTERBuddy::~SIPSTERBuddy() finish" << std::endl;

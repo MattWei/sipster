@@ -9,7 +9,8 @@
         'src/SIPSTERMedia.cc',
         'src/SIPSTERTransport.cc',
         'src/SIPSTERBuddy.cc',
-        'src/hplayer.cpp'
+        'src/hplayer.cpp',
+        'src/SIPSTERPlatform.cc'
       ],
       'include_dirs': [
         "src",
@@ -70,7 +71,8 @@
               "-lwsock32.lib",
               "-lws2_32.lib",
               "-ldsound.lib",
-              "-lole32.lib"
+              "-lole32.lib",
+              "-llibdog_windows_3154244.lib"
             ]
           },
           "configurations": {

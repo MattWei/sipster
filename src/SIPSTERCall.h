@@ -78,7 +78,7 @@ public:
 class TonePlayer : public AudioMediaPlayer
 {
 public:
-  TonePlayer(SIPSTERCall* call, PlayerType type) : mCall(call), mType(START_TONE) {}
+  TonePlayer(SIPSTERCall* call, PlayerType type) : mCall(call), mType(type) {}
   ~TonePlayer() {}
 
   virtual bool onEof()

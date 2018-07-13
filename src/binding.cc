@@ -5,13 +5,18 @@
 //#include <regex.h>
 #include <pjsua2.hpp>
 #include <iostream>
+#include <locale>
+#include <codecvt>
+#include <cstdint>
 
 #include "common.h"
 #include "SIPSTERTransport.h"
-#include "hplayer.hpp"
+//#include "hplayer.hpp"
 
 #include "SIPSTERLocalMedia.h"
 //#include "SIPSTERAudioDevInfo.h"
+
+#include "SIPSTERPlatform.h"
 
 #define X(kind, ctype, name, v8type, valconv) \
   Nan::Persistent<String> kind##_##name##_symbol;
@@ -22,6 +27,7 @@ REGSTARTING_FIELDS
 INSTANTMESSAGE_FIELDS
 PLAYERSTATUS_FIELDS
 BUDDYSTATUS_FIELDS
+SYSTEMSTATUS_FIELDS
 #undef X
 
 #define X(kind, literal) \
@@ -38,6 +44,8 @@ class SIPSTERLogWriter;
 
 SIPSTERLogWriter *logger = NULL;
 //SIPSTERLocalMedia *localMedia = NULL;
+
+SIPSTERPlatform *sipPlatform = NULL;
 
 struct CustomLogEntry
 {
@@ -61,6 +69,7 @@ uv_async_t dumb;
 Nan::Persistent<String> emit_symbol;
 Endpoint *ep = new Endpoint;
 
+bool system_init = false;
 uv_mutex_t local_media_mutex;
 
 // DTMF event ==================================================================
@@ -395,7 +404,7 @@ void dumb_cb(uv_async_t *handle)
     break;
     case EVENT_INSTANTMESSAGE:
     {
-      //std::cout << "dumb_cb EVENT_INSTANTMESSAGE" << std::endl;
+      std::cout << "dumb_cb EVENT_INSTANTMESSAGE" << std::endl;
 
       EV_ARGS_INSTANTMESSAGE *args =
           reinterpret_cast<EV_ARGS_INSTANTMESSAGE *>(ev.args);
@@ -429,9 +438,9 @@ void dumb_cb(uv_async_t *handle)
           Nan::New(args->type),
           Nan::New(args->param)};
 
-      //std::cout << "dumb_cb EVENT_PLAYERSTATUS, field size:"
-      //          << N_PLAYERSTATUS_FIELDS << "," << args->songPath
-      //          << "," << args->type << "," << args->param << std::endl;
+      std::cout << "dumb_cb EVENT_PLAYERSTATUS, field size:"
+                << N_PLAYERSTATUS_FIELDS << "," << args->songPath
+                << "," << args->type << "," << args->param << std::endl;
       if (call && call->emit)
       {
         call->emit->Call(call->handle(), N_PLAYERSTATUS_FIELDS, emit_argv);
@@ -469,6 +478,28 @@ void dumb_cb(uv_async_t *handle)
         std::cout << "buddy emit fail" << std::endl;
       }
 
+      delete args;
+    }
+    break;
+    case EVENT_SYSTEMSTATUS:
+    {
+      std::cout << "dumb_cb EVENT_SYSTEMSTATUS" << std::endl;
+
+      EV_ARGS_SYSTEMSTATUS *args =
+          reinterpret_cast<EV_ARGS_SYSTEMSTATUS *>(ev.args);
+          
+      SIPSTERPlatform *system = ev.system;
+
+      Local<Value> emit_argv[N_SYSTEMSTATUS_FIELDS] = {
+          Nan::New(ev_SYSTEMSTATUS_systemStatus_symbol),
+          Nan::New(args->state.c_str()).ToLocalChecked()};
+
+      std::cout << "dumb_cb EVENT_SYSTEMSTATUS, field size:"
+                << N_SYSTEMSTATUS_FIELDS << "," << args->state << std::endl;
+      if (system && system->emit) {
+        system->emit->Call(system->handle(), N_SYSTEMSTATUS_FIELDS, emit_argv);
+      }
+      
       delete args;
     }
     break;
@@ -574,6 +605,7 @@ static NAN_METHOD(CreateRecorder)
 
 static NAN_METHOD(CreatePlayer)
 {
+  #if 0
   Nan::HandleScope scope;
 
   HPlayer *player = new HPlayer();
@@ -585,6 +617,41 @@ static NAN_METHOD(CreatePlayer)
   med->media = player;
   med->is_media_new = true;
   player->media = med;
+
+  info.GetReturnValue().Set(med_obj);
+  #endif
+  Nan::HandleScope scope;
+
+  string filename;  
+  if (info.Length() > 0 && info[0]->IsString())
+  {
+    Nan::Utf8String dest_str(info[0]);
+    filename = string(*dest_str);
+  }
+  else
+    return Nan::ThrowTypeError("Missing source filename");
+
+  SIPSTERPlayer *player = new SIPSTERPlayer();
+  try
+  {
+    player->createPlayer(filename, PJMEDIA_FILE_NO_LOOP);
+  }
+  catch (Error &err)
+  {
+    delete player;
+    string errstr = "player->createPlayer() error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  }
+
+  Local<Object> med_obj;
+  med_obj = Nan::New(SIPSTERMedia_constructor)
+                ->GetFunction()
+                ->NewInstance(0, NULL);
+  SIPSTERMedia *med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(med_obj);
+  med->media = player;
+  med->is_media_new = true;
+  player->media = med;
+  player->options = PJMEDIA_FILE_NO_LOOP;
 
   info.GetReturnValue().Set(med_obj);
 }
@@ -666,6 +733,22 @@ static NAN_METHOD(EPVersion)
            Nan::New(v.numeric));
 
   info.GetReturnValue().Set(vinfo);
+}
+
+static NAN_METHOD(SystemInit)
+{
+  Nan::HandleScope scope;
+  //if (sipPlatform != NULL)
+  //  return Nan:ThrowError("Already initialized system");
+  Local<Object> platform_obj;
+  platform_obj = Nan::New(SIPSTERPlatform_constructor)
+                ->GetFunction()
+                ->NewInstance(0, NULL);
+  sipPlatform = Nan::ObjectWrap::Unwrap<SIPSTERPlatform>(platform_obj);
+
+  uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
+
+  info.GetReturnValue().Set(platform_obj);
 }
 
 static NAN_METHOD(EPInit)
@@ -828,7 +911,9 @@ static NAN_METHOD(EPInit)
     ep_cfg.medConfig.noVad = 1;
     std::cout << "#######ep_cfg.medConfig.noVad=" << ep_cfg.medConfig.noVad << std::endl;
     ep->libInit(ep_cfg);
-    ep->codecSetPriority("L16/44100/1", 139);
+
+    ep->codecSetPriority("G722", 139);
+    //ep->codecSetPriority("L16/44100/1", 139);
     
     ep_init = true;
   }
@@ -838,7 +923,7 @@ static NAN_METHOD(EPInit)
     return Nan::ThrowError(errstr.c_str());
   }
 
-  uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
+  //uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
 
   if (Endpoint::instance().audDevManager().getDevCount() <= 0)
   {
@@ -1016,6 +1101,13 @@ static NAN_METHOD(GetAudioDevices)
   {
     AudioDevInfo *audioDev = audioDevs.at(i);
     Local<Object> vinfo = Nan::New<Object>();
+
+    int pos = audioDev->name.find(" (");
+    if (pos != std::string::npos && pos > 0) {
+      audioDev->name = audioDev->name.substr(0, pos);
+    }
+    std::cout << "audio device, id:" << i << " name:" << audioDev->name << std::endl;
+
     Nan::Set(vinfo,
            Nan::New("name").ToLocalChecked(),
            Nan::New(audioDev->name.c_str()).ToLocalChecked());
@@ -1029,7 +1121,6 @@ static NAN_METHOD(GetAudioDevices)
            Nan::New("driver").ToLocalChecked(),
            Nan::New(audioDev->driver.c_str()).ToLocalChecked());
 
-      //std::string devName = audioDev->name;
     devices->Set(i, vinfo);
   }
 
@@ -1055,6 +1146,7 @@ extern "C"
     INSTANTMESSAGE_FIELDS
     PLAYERSTATUS_FIELDS
     BUDDYSTATUS_FIELDS
+    SYSTEMSTATUS_FIELDS
 #undef X
 
     CALLDTMF_DTMF0_symbol.Reset(Nan::New("0").ToLocalChecked());
@@ -1086,6 +1178,11 @@ extern "C"
     SIPSTERMedia::Initialize(target);
     SIPSTERTransport::Initialize(target);
     SIPSTERBuddy::Initialize(target);
+    SIPSTERPlatform::Initialize(target);
+
+    Nan::Set(target,
+             Nan::New("systemInit").ToLocalChecked(),
+             Nan::New<FunctionTemplate>(SystemInit)->GetFunction());
 
     Nan::Set(target,
              Nan::New("version").ToLocalChecked(),

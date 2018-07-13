@@ -22,6 +22,7 @@ static Nan::Persistent<String> media_status_unknown_symbol;
 SIPSTERMedia::SIPSTERMedia() : emit(NULL), media(NULL), is_media_new(false) {}
 SIPSTERMedia::~SIPSTERMedia()
 {
+  std::cout << "SIPSTERMedia::~SIPSTERMedia()" << std::endl;
   if (media && is_media_new)
   {
     delete media;
@@ -221,9 +222,13 @@ NAN_METHOD(SIPSTERMedia::StopLocalPlay)
   {
     AudioMedia &play_med = Endpoint::instance().audDevManager().getPlaybackDevMedia();
     med->media->stopTransmit(play_med);
+
+    delete med->media;
+    med->media = NULL;
+    med->is_media_new = false;
   }
   else
-    return Nan::ThrowTypeError("Missing song path");
+    return Nan::ThrowTypeError("Player not started");
 
   info.GetReturnValue().SetUndefined();
 }
@@ -239,7 +244,7 @@ NAN_METHOD(SIPSTERMedia::StartLocalRecord)
     cap_med.startTransmit(*med->media);
   }
   else
-    return Nan::ThrowTypeError("Missing song path");
+    return Nan::ThrowTypeError("Missing Recorder");
 
   info.GetReturnValue().SetUndefined();
 }
@@ -253,9 +258,11 @@ NAN_METHOD(SIPSTERMedia::StopLocalRecord)
   {
     AudioMedia &cap_med = Endpoint::instance().audDevManager().getCaptureDevMedia();
     cap_med.stopTransmit(*med->media);
+
+    delete med->media;
+    med->media = NULL;
+    med->is_media_new = false;
   }
-  else
-    return Nan::ThrowTypeError("Missing song path");
 
   info.GetReturnValue().SetUndefined();
 }
@@ -328,7 +335,6 @@ NAN_GETTER(SIPSTERMedia::DirGetter)
   info.GetReturnValue().Set(str);
 }
 
-
 NAN_GETTER(SIPSTERMedia::StatusGetter)
 {
   SIPSTERMedia *med = Nan::ObjectWrap::Unwrap<SIPSTERMedia>(info.This());
@@ -356,7 +362,6 @@ NAN_GETTER(SIPSTERMedia::StatusGetter)
   }
   info.GetReturnValue().Set(str);
 }
-
 
 NAN_GETTER(SIPSTERMedia::SrcRTPGetter)
 {

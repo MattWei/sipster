@@ -12,6 +12,7 @@
 #include "SIPSTERCall.h"
 #include "SIPSTERMedia.h"
 #include "SIPSTERBuddy.h"
+#include "SIPSTERPlatform.h"
 
 using namespace std;
 using namespace node;
@@ -79,7 +80,8 @@ using namespace pj;
   X(REGSTARTING)                                                               \
   X(INSTANTMESSAGE)                                                            \
   X(PLAYERSTATUS)                                                              \
-  X(BUDDYSTATUS)  
+  X(BUDDYSTATUS)                                                               \
+  X(SYSTEMSTATUS) 
 
 #define EVENT_SYMBOLS                                                          \
   X(INCALL, call)                                                              \
@@ -100,7 +102,8 @@ using namespace pj;
   X(REGSTARTING, unregistering)                                                \
   X(INSTANTMESSAGE, instantMessage)                                            \
   X(PLAYERSTATUS, playerStatus)                                                \
-  X(BUDDYSTATUS, buddyStatus)
+  X(BUDDYSTATUS, buddyStatus)                                                  \
+  X(SYSTEMSTATUS, systemStatus)
                     
 enum SIPEvent {
 #define X(kind)                                                                \
@@ -115,6 +118,7 @@ struct SIPEventInfo {
   SIPSTERAccount* acct;
   SIPSTERMedia* media;
   SIPSTERBuddy* buddy;
+  SIPSTERPlatform *system;
   void* args;
 };
 
@@ -224,6 +228,16 @@ struct EV_ARGS_PLAYEREOF {
 #undef X
 };
 
+// Instant message event ====================================================
+#define N_SYSTEMSTATUS_FIELDS 2
+#define SYSTEMSTATUS_FIELDS                                                     \
+  X(SYSTEMSTATUS, string, state, String, state.c_str())              
+struct EV_ARGS_SYSTEMSTATUS {
+#define X(kind, ctype, name, v8type, valconv) ctype name;
+  SYSTEMSTATUS_FIELDS
+#undef X
+};
+
 #define X(kind, ctype, name, v8type, valconv)                                  \
   extern Nan::Persistent<String> kind##_##name##_symbol;
   INCALL_FIELDS
@@ -233,6 +247,7 @@ struct EV_ARGS_PLAYEREOF {
   INSTANTMESSAGE_FIELDS
   PLAYERSTATUS_FIELDS
   BUDDYSTATUS_FIELDS
+  SYSTEMSTATUS_FIELDS
 #undef X
 
 // start generic event-related definitions =====================================
@@ -253,6 +268,7 @@ extern Nan::Persistent<FunctionTemplate> SIPSTERAccount_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERCall_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERTransport_constructor;
 extern Nan::Persistent<FunctionTemplate> SIPSTERBuddy_constructor;
+extern Nan::Persistent<FunctionTemplate> SIPSTERPlatform_constructor;
 //extern Nan::Persistent<FunctionTemplate> SIPSTERAudioDevInfo_constructor;
 
 extern Endpoint* ep;

@@ -38,6 +38,8 @@ void SIPSTERCall::onPlayEof(PlayerType type)
 {
   if (type == START_TONE)
   {
+    std::cout << "#######Start Tone play eof" << std::endl;
+
     mCallState = MIC_CALLING;
     delete mTonePlayer;
     mTonePlayer = NULL;
@@ -45,6 +47,8 @@ void SIPSTERCall::onPlayEof(PlayerType type)
   }
   else if (type == STOP_TONE)
   {
+    std::cout << "#######Stop Tone play eof" << std::endl;
+
     delete mTonePlayer;
     mTonePlayer = NULL;
     mCallState = STOPED;
@@ -54,6 +58,7 @@ void SIPSTERCall::onPlayEof(PlayerType type)
   }
   else if (type == MUSIC)
   {
+    std::cout << "#######Music play eof" << std::endl;
     sendPlayState(mCurrentSong, END, 1000);
   }
 }
@@ -61,7 +66,7 @@ void SIPSTERCall::onPlayEof(PlayerType type)
 void SIPSTERCall::sendPlayState(std::string song, int type, int param)
 {
     SETUP_EVENT(PLAYERSTATUS);
-
+    std::cout << "Play eof:" << song << ", type:" << type << std::endl;
     ev.call = this;
     args->songPath = song;
     args->type = type;
@@ -220,6 +225,8 @@ void SIPSTERCall::changeMusic(std::string musicPath)
     }
   }
 
+  delete mTonePlayer;
+  mTonePlayer = newPlayer;
   sendPlayState(mCurrentSong, START, 0);
 }
 
@@ -494,7 +501,7 @@ NAN_METHOD(SIPSTERCall::PlayMusic)
     }
     catch (Error &err)
     {
-      string errstr = "Call.dialDtmf() error: " + err.info();
+      string errstr = "Call.play() error: " + err.info();
       return Nan::ThrowError(errstr.c_str());
     }
   }
@@ -708,7 +715,7 @@ void SIPSTERCall::Initialize(Handle<Object> target)
   Nan::SetPrototypeMethod(tpl, "unref", DoUnref);
   Nan::SetPrototypeMethod(tpl, "getStatsDump", GetStats);
 
-  Nan::SetPrototypeMethod(tpl, "playMusic", PlayMusic);
+  Nan::SetPrototypeMethod(tpl, "play", PlayMusic);
 
   Nan::SetAccessor(tpl->PrototypeTemplate(),
                    Nan::New("connDuration").ToLocalChecked(),
