@@ -12,9 +12,9 @@ using namespace std;
 using namespace node;
 using namespace v8;
 
-#ifdef _WIN32
+//#ifdef _WIN32
 #define NORMAL_PRIORITY_CLASS 0x00000020
-#endif
+//#endif
 
 class SIPSTERPlatform : public Nan::ObjectWrap {
 private:

@@ -7,8 +7,10 @@
 
 Nan::Persistent<FunctionTemplate> SIPSTERPlatform_constructor;
 
+#ifdef _WIN32
 #include "dog_api.h"
 #include "vendor_code.h"
+#endif
 
 //#define USE_SUPER_DOG 0
 #define HONEYWELL_SUPER_DOG_ID 1

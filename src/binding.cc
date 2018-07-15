@@ -287,7 +287,7 @@ void dumb_cb(uv_async_t *handle)
             med->status = ci.media[i].status;
 
             std::cout << "media " << i << " status " << ci.media[i].status << std::endl;
-            
+
             /*if (ci.media[i].status == PJSUA_CALL_MEDIA_ACTIVE) {
                 try {
                   MediaTransportInfo mti = call->getMedTransportInfo(i);
@@ -487,7 +487,7 @@ void dumb_cb(uv_async_t *handle)
 
       EV_ARGS_SYSTEMSTATUS *args =
           reinterpret_cast<EV_ARGS_SYSTEMSTATUS *>(ev.args);
-          
+
       SIPSTERPlatform *system = ev.system;
 
       Local<Value> emit_argv[N_SYSTEMSTATUS_FIELDS] = {
@@ -496,10 +496,11 @@ void dumb_cb(uv_async_t *handle)
 
       std::cout << "dumb_cb EVENT_SYSTEMSTATUS, field size:"
                 << N_SYSTEMSTATUS_FIELDS << "," << args->state << std::endl;
-      if (system && system->emit) {
+      if (system && system->emit)
+      {
         system->emit->Call(system->handle(), N_SYSTEMSTATUS_FIELDS, emit_argv);
       }
-      
+
       delete args;
     }
     break;
@@ -605,7 +606,7 @@ static NAN_METHOD(CreateRecorder)
 
 static NAN_METHOD(CreatePlayer)
 {
-  #if 0
+#if 0
   Nan::HandleScope scope;
 
   HPlayer *player = new HPlayer();
@@ -619,10 +620,10 @@ static NAN_METHOD(CreatePlayer)
   player->media = med;
 
   info.GetReturnValue().Set(med_obj);
-  #endif
+#endif
   Nan::HandleScope scope;
 
-  string filename;  
+  string filename;
   if (info.Length() > 0 && info[0]->IsString())
   {
     Nan::Utf8String dest_str(info[0]);
@@ -742,8 +743,8 @@ static NAN_METHOD(SystemInit)
   //  return Nan:ThrowError("Already initialized system");
   Local<Object> platform_obj;
   platform_obj = Nan::New(SIPSTERPlatform_constructor)
-                ->GetFunction()
-                ->NewInstance(0, NULL);
+                     ->GetFunction()
+                     ->NewInstance(0, NULL);
   sipPlatform = Nan::ObjectWrap::Unwrap<SIPSTERPlatform>(platform_obj);
 
   uv_async_init(uv_default_loop(), &dumb, static_cast<uv_async_cb>(dumb_cb));
@@ -854,6 +855,7 @@ static NAN_METHOD(EPInit)
       val = log_obj->Get(Nan::New("writer").ToLocalChecked());
       if (val->IsFunction())
       {
+        std::cout << "Get log writer" << std::endl;
         if (logger)
         {
           delete logger;
@@ -866,9 +868,13 @@ static NAN_METHOD(EPInit)
                       &logging,
                       static_cast<uv_async_cb>(logging_cb));
       }
+      else
+      {
+        std::cout << "Get no log writer" << std::endl;
+      }
 
-      //ep_cfg.logConfig = logConfig;
-      ep_cfg.logConfig.level = 5;
+      ep_cfg.logConfig = logConfig;
+      //ep_cfg.logConfig.level = 5;
     }
 
     val = cfg_obj->Get(Nan::New("medConfig").ToLocalChecked());
@@ -912,9 +918,9 @@ static NAN_METHOD(EPInit)
     std::cout << "#######ep_cfg.medConfig.noVad=" << ep_cfg.medConfig.noVad << std::endl;
     ep->libInit(ep_cfg);
 
-    ep->codecSetPriority("G722", 139);
+    //ep->codecSetPriority("G722", 139);
     //ep->codecSetPriority("L16/44100/1", 139);
-    
+
     ep_init = true;
   }
   catch (Error &err)
@@ -1103,28 +1109,82 @@ static NAN_METHOD(GetAudioDevices)
     Local<Object> vinfo = Nan::New<Object>();
 
     int pos = audioDev->name.find(" (");
-    if (pos != std::string::npos && pos > 0) {
+    if (pos != std::string::npos && pos > 0)
+    {
       audioDev->name = audioDev->name.substr(0, pos);
     }
     std::cout << "audio device, id:" << i << " name:" << audioDev->name << std::endl;
 
     Nan::Set(vinfo,
-           Nan::New("name").ToLocalChecked(),
-           Nan::New(audioDev->name.c_str()).ToLocalChecked());
+             Nan::New("name").ToLocalChecked(),
+             Nan::New(audioDev->name.c_str()).ToLocalChecked());
     Nan::Set(vinfo,
-           Nan::New("inputCount").ToLocalChecked(),
-           Nan::New(audioDev->inputCount));
+             Nan::New("inputCount").ToLocalChecked(),
+             Nan::New(audioDev->inputCount));
     Nan::Set(vinfo,
-           Nan::New("outputCount").ToLocalChecked(),
-           Nan::New(audioDev->outputCount));
+             Nan::New("outputCount").ToLocalChecked(),
+             Nan::New(audioDev->outputCount));
     Nan::Set(vinfo,
-           Nan::New("driver").ToLocalChecked(),
-           Nan::New(audioDev->driver.c_str()).ToLocalChecked());
+             Nan::New("driver").ToLocalChecked(),
+             Nan::New(audioDev->driver.c_str()).ToLocalChecked());
 
     devices->Set(i, vinfo);
   }
 
   info.GetReturnValue().Set(devices);
+}
+
+static NAN_METHOD(SetCodecPriority)
+{
+  Nan::HandleScope scope;
+
+  string codecId;
+  int priority = 0;
+  if (info.Length() > 0 && info[0]->IsString()) // && info[1]->IsInt32())
+  {
+    Nan::Utf8String codec_str(info[0]);
+    codecId = string(*codec_str);
+    if (info.Length() > 1) {
+      priority = info[1]->Int32Value();
+      if (priority < 0)
+        priority = 0;
+
+    }
+    try
+    {
+      ep->codecSetPriority(codecId, priority);
+      std::cout << "codecSetPriority: codeId:" << codecId << ", priority:" << priority << std::endl;
+    }
+    catch (Error &err)
+    {
+      string errstr = "setCodecPriority error:" + err.info();
+      return Nan::ThrowError(errstr.c_str());
+    }
+  }
+  else
+  {
+    string errstr = "setCodecPriority error, no codec id or priority";
+    return Nan::ThrowError(errstr.c_str());
+  }
+
+  info.GetReturnValue().SetUndefined();
+}
+
+static NAN_METHOD(GetCodecEnum)
+{
+  Nan::HandleScope scope;
+
+  Isolate *isolate = info.GetIsolate();
+  Local<Array> codec = Array::New(isolate);
+  CodecInfoVector codecVec = Endpoint::instance().codecEnum();
+  for (unsigned int i = 0; i < codecVec.size(); ++i)
+  {
+    CodecInfo *codecInfo = codecVec.at(i);
+    std::cout << "codec, id:" << i << " code id:" << codecInfo->codecId << std::endl;
+    codec->Set(i, Nan::New(codecInfo->codecId.c_str()).ToLocalChecked());
+  }
+
+  info.GetReturnValue().Set(codec);
 }
 
 extern "C"
@@ -1225,6 +1285,14 @@ extern "C"
     Nan::Set(target,
              Nan::New("enumDevs").ToLocalChecked(),
              Nan::New<FunctionTemplate>(GetAudioDevices)->GetFunction());
+
+    Nan::Set(target,
+             Nan::New("codecEnum").ToLocalChecked(),
+             Nan::New<FunctionTemplate>(GetCodecEnum)->GetFunction());
+
+    Nan::Set(target,
+             Nan::New("setCodecPriority").ToLocalChecked(),
+             Nan::New<FunctionTemplate>(SetCodecPriority)->GetFunction());
   }
 
   NODE_MODULE(sipster, init);
