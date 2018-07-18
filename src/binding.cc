@@ -56,6 +56,8 @@ struct CustomLogEntry
 };
 list<CustomLogEntry> log_queue;
 uv_mutex_t log_mutex;
+uv_mutex_t logger_mutex;
+
 uv_async_t logging;
 bool ep_init = false;
 bool ep_create = false;
@@ -67,7 +69,7 @@ uv_mutex_t event_mutex;
 uv_mutex_t async_mutex;
 uv_async_t dumb;
 Nan::Persistent<String> emit_symbol;
-Endpoint *ep = new Endpoint;
+Endpoint *ep = NULL; //new Endpoint;
 
 bool system_init = false;
 uv_mutex_t local_media_mutex;
@@ -195,13 +197,10 @@ void dumb_cb(uv_async_t *handle)
     {
       EV_ARGS_REGSTATE *args = reinterpret_cast<EV_ARGS_REGSTATE *>(ev.args);
       SIPSTERAccount *acct = ev.acct;
-      Local<Value> emit_argv[1] = {
-          args->active
-              ? Nan::New(ev_REGSTATE_registered_symbol)
-              : Nan::New(ev_REGSTATE_unregistered_symbol)};
-      acct->emit->Call(acct->handle(), 1, emit_argv);
+
+//Send state first
       Local<Value> emit_catchall_argv[N_REGSTATE_FIELDS + 1] = {
-          Nan::New(ev_CALLSTATE_state_symbol),
+          Nan::New(ev_REGSTATE_state_symbol),
 #define X(kind, ctype, name, v8type, valconv) \
   Nan::New<v8type>(args->valconv),
           REGSTATE_FIELDS
@@ -210,6 +209,13 @@ void dumb_cb(uv_async_t *handle)
       acct->emit->Call(acct->handle(),
                        N_REGSTATE_FIELDS + 1,
                        emit_catchall_argv);
+
+      Local<Value> emit_argv[1] = {
+          args->active
+              ? Nan::New(ev_REGSTATE_registered_symbol)
+              : Nan::New(ev_REGSTATE_unregistered_symbol)};
+      acct->emit->Call(acct->handle(), 1, emit_argv);
+
       delete args;
     }
     break;
@@ -543,7 +549,11 @@ void logging_cb(uv_async_t *handle)
     log_argv[2] = Nan::New<Number>(log.threadId);
     log_argv[3] = Nan::New<String>(log.threadName).ToLocalChecked();
 
-    logger->func->Call(4, log_argv);
+    uv_mutex_lock(&logger_mutex);
+    if (logger != NULL) {
+        logger->func->Call(4, log_argv);
+    }
+    uv_mutex_unlock(&logger_mutex);
   }
 }
 // =============================================================================
@@ -764,6 +774,7 @@ static NAN_METHOD(EPInit)
   {
     try
     {
+      ep = new Endpoint();
       ep->libCreate();
       ep_create = true;
     }
@@ -856,10 +867,17 @@ static NAN_METHOD(EPInit)
       if (val->IsFunction())
       {
         std::cout << "Get log writer" << std::endl;
+
+        uv_mutex_lock(&logger_mutex);
+                  std::cout << "lock logger_mutex" << std::endl;
         if (logger)
         {
-          delete logger;
+          std::cout << "uv_close" << std::endl;
           uv_close(reinterpret_cast<uv_handle_t *>(&logging), logging_close_cb);
+          std::cout << "delete loger" << std::endl;
+          delete logger;
+          logger = NULL;
+          std::cout << "uv_close finish" << std::endl;
         }
         logger = new SIPSTERLogWriter();
         logger->func = new Nan::Callback(Local<Function>::Cast(val));
@@ -867,6 +885,7 @@ static NAN_METHOD(EPInit)
         uv_async_init(uv_default_loop(),
                       &logging,
                       static_cast<uv_async_cb>(logging_cb));
+        uv_mutex_unlock(&logger_mutex);
       }
       else
       {
@@ -918,7 +937,7 @@ static NAN_METHOD(EPInit)
     std::cout << "#######ep_cfg.medConfig.noVad=" << ep_cfg.medConfig.noVad << std::endl;
     ep->libInit(ep_cfg);
 
-    //ep->codecSetPriority("G722", 139);
+    ep->codecSetPriority("G722", 139);
     //ep->codecSetPriority("L16/44100/1", 139);
 
     ep_init = true;
@@ -986,8 +1005,17 @@ static NAN_METHOD(EPDestory)
 
   try
   {
-    ep->libDestroy();
+    std::cout << "ep->libDestroy()" << std::endl;
+    if(ep) {
+      ep->libDestroy();
+      delete ep;
+      ep = NULL;
 
+      //uv_mutex_lock(&logger_mutex);
+      logger = NULL;
+      //uv_mutex_lock(&logger_mutex);
+    }
+    std::cout << "ep->libDestroy() finish" << std::endl;
     ep_start = false;
     ep_create = false;
     ep_init = false;
@@ -1144,11 +1172,11 @@ static NAN_METHOD(SetCodecPriority)
   {
     Nan::Utf8String codec_str(info[0]);
     codecId = string(*codec_str);
-    if (info.Length() > 1) {
+    if (info.Length() > 1)
+    {
       priority = info[1]->Int32Value();
       if (priority < 0)
         priority = 0;
-
     }
     try
     {
@@ -1232,6 +1260,7 @@ extern "C"
     uv_mutex_init(&log_mutex);
     uv_mutex_init(&async_mutex);
     uv_mutex_init(&local_media_mutex);
+    uv_mutex_init(&logger_mutex);
 
     SIPSTERAccount::Initialize(target);
     SIPSTERCall::Initialize(target);

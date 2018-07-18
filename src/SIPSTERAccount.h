@@ -27,6 +27,7 @@ public:
   virtual void onInstantMessage(OnInstantMessageParam &prm);
   static NAN_METHOD(New);
   static NAN_METHOD(Modify);
+  static NAN_METHOD(Delete);
   static NAN_GETTER(ValidGetter);
   static NAN_GETTER(DefaultGetter);
   static NAN_SETTER(DefaultSetter);

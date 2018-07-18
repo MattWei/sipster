@@ -382,7 +382,7 @@ void SIPSTERAccount::onRegStarted(OnRegStartedParam &prm) {
   ev.acct = this;
 
   args->renew = prm.renew;
-
+  std::cout << "onRegStarted" << std::endl;
   ENQUEUE_EVENT(ev);
 }
 
@@ -394,6 +394,7 @@ void SIPSTERAccount::onRegState(OnRegStateParam &prm) {
 
   args->active = ai.regIsActive;
   args->statusCode = prm.code;
+  std::cout << "OnRegState:" << prm.code << std::endl;
 
   ENQUEUE_EVENT(ev);
 }
@@ -508,6 +509,32 @@ NAN_METHOD(SIPSTERAccount::Modify) {
 
   info.GetReturnValue().SetUndefined();
 }
+
+
+NAN_METHOD(SIPSTERAccount::Delete) {
+  Nan::HandleScope scope;
+  SIPSTERAccount* acct = Nan::ObjectWrap::Unwrap<SIPSTERAccount>(info.This());
+  delete acct;
+/*
+  AccountConfig acct_cfg;
+  if (info.Length() > 0 && info[0]->IsObject())
+    acct_cfg = genConfig(info[0]->ToObject());
+  else
+    return Nan::ThrowTypeError("Missing renew argument");
+
+  try {
+    std::cout << "sip account:" << acct_cfg.idUri << std::endl;
+    std::cout << "registerarUri:" << acct_cfg.regConfig.registrarUri << std::endl;
+
+    acct->modify(acct_cfg);
+  } catch(Error& err) {
+    string errstr = "Account->modify() error: " + err.info();
+    return Nan::ThrowError(errstr.c_str());
+  }
+  */
+  info.GetReturnValue().SetUndefined();
+}
+
 
 NAN_GETTER(SIPSTERAccount::ValidGetter) {
   SIPSTERAccount* acct = Nan::ObjectWrap::Unwrap<SIPSTERAccount>(info.This());
@@ -803,6 +830,7 @@ void SIPSTERAccount::Initialize(Handle<Object> target) {
   tpl->SetClassName(name);
 
   Nan::SetPrototypeMethod(tpl, "modify", Modify);
+  Nan::SetPrototypeMethod(tpl, "delete", Delete);
   Nan::SetPrototypeMethod(tpl, "makeCall", MakeCall);
   Nan::SetPrototypeMethod(tpl, "getInfo", GetInfo);
   Nan::SetPrototypeMethod(tpl, "setRegistration", SetRegistration);
